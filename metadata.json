@@ -1,0 +1,5 @@
+{
+  "name": "Glen Service Manager App",
+  "description": "A mobile-first app for 'XYZ Glen Service Partner' to automate daily service job assignment, payment tracking, and customer feedback.",
+  "requestFramePermissions": []
+}
