@@ -4,6 +4,8 @@ import { useAppContext } from '../context/AppContext';
 import AddTicketModal from './AddTicketModal';
 import ViewJobs from './ViewJobs';
 import TechnicianRatings from './TechnicianRatings';
+import IntelligentAddTicketModal from './IntelligentAddTicketModal';
+import { Ticket } from '../types';
 
 interface AdminDashboardProps {
     onViewTicket: (ticketId: string) => void;
@@ -13,8 +15,27 @@ type AdminView = 'jobs' | 'ratings';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
   const { user, logout } = useAppContext();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isIntelligentModalOpen, setIsIntelligentModalOpen] = useState(false);
+  const [intelligentMode, setIntelligentMode] = useState<'text' | 'image'>('text');
+  const [parsedTicketData, setParsedTicketData] = useState<Partial<Ticket> | null>(null);
   const [activeView, setActiveView] = useState<AdminView>('jobs');
+
+  const handleOpenIntelligentModal = (mode: 'text' | 'image') => {
+    setIntelligentMode(mode);
+    setIsIntelligentModalOpen(true);
+  };
+
+  const handleParsedData = (data: Partial<Ticket>) => {
+    setParsedTicketData(data);
+    setIsIntelligentModalOpen(false);
+    setIsManualModalOpen(true); // Open the manual modal with pre-filled data
+  };
+  
+  const handleCloseManualModal = () => {
+      setIsManualModalOpen(false);
+      setParsedTicketData(null); // Clear data when closing
+  }
 
   const navButtonClasses = (view: AdminView) =>
     `flex-1 py-3 px-2 text-center text-sm font-semibold transition-all duration-300 ${
@@ -36,11 +57,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-md">
-         <button onClick={() => setIsModalOpen(true)} className="w-full bg-glen-blue text-white font-bold py-4 px-4 rounded-lg hover:bg-blue-600 transition-colors text-lg flex items-center justify-center space-x-2">
-            <PlusIcon/>
-            <span>Add New Ticket</span>
-         </button>
+        <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">Create New Service Ticket</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button onClick={() => setIsManualModalOpen(true)} className="w-full bg-glen-blue text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2">
+                <PencilIcon/>
+                <span>Manual Entry</span>
+            </button>
+            <button onClick={() => handleOpenIntelligentModal('text')} className="w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-2">
+                <TextIcon/>
+                <span>From Text</span>
+            </button>
+            <button onClick={() => handleOpenIntelligentModal('image')} className="w-full bg-purple-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-600 transition-colors flex items-center justify-center space-x-2">
+                <CameraIcon/>
+                <span>From Photo</span>
+            </button>
+        </div>
       </div>
+
 
       <div className="bg-white p-2 rounded-lg shadow-md">
         <nav className="flex space-x-2">
@@ -58,14 +91,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
         {activeView === 'ratings' && <TechnicianRatings />}
       </div>
 
-      {isModalOpen && <AddTicketModal onClose={() => setIsModalOpen(false)} />}
+      {isManualModalOpen && <AddTicketModal onClose={handleCloseManualModal} initialData={parsedTicketData} />}
+      {isIntelligentModalOpen && <IntelligentAddTicketModal mode={intelligentMode} onClose={() => setIsIntelligentModalOpen(false)} onParsed={handleParsedData} />}
     </div>
   );
 };
 
-const PlusIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+const PencilIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
+    </svg>
+);
+
+const TextIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+    </svg>
+);
+
+const CameraIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 );
 

@@ -1,20 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Ticket } from '../types';
 
 interface AddTicketModalProps {
   onClose: () => void;
+  initialData?: Partial<Ticket> | null;
 }
 
-const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose }) => {
+const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData }) => {
   const { technicians, addTicket } = useAppContext();
-  const [customerName, setCustomerName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [complaint, setComplaint] = useState('');
+  const [customerName, setCustomerName] = useState(initialData?.customerName || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [complaint, setComplaint] = useState(initialData?.complaint || '');
   const [technicianId, setTechnicianId] = useState(technicians[0]?.id || '');
-  const [serviceCategory, setServiceCategory] = useState('');
+  const [serviceCategory, setServiceCategory] = useState(initialData?.serviceCategory || '');
   const [preferredTime, setPreferredTime] = useState('10AM-12PM');
+
+  useEffect(() => {
+    if (initialData) {
+        setCustomerName(initialData.customerName || '');
+        setPhone(initialData.phone || '');
+        setAddress(initialData.address || '');
+        setComplaint(initialData.complaint || '');
+        setServiceCategory(initialData.serviceCategory || '');
+    }
+  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +42,6 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose }) => {
       technicianId,
       serviceCategory,
       preferredTime,
-      // FIX: Add missing properties `productDetails` and `symptoms` to satisfy the type.
       productDetails: {
         make: 'Glen',
         segment: '',
@@ -51,7 +61,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose }) => {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-full overflow-y-auto">
         <div className="p-6">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-2xl font-bold text-gray-800">Add New Ticket</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{initialData ? 'Confirm Ticket Details' : 'Add New Ticket'}</h3>
                 <button onClick={onClose} className="text-gray-500 hover:text-gray-800">&times;</button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
