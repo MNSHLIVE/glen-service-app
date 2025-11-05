@@ -82,6 +82,32 @@ const initialFeedback: Feedback[] = [
     }
 ]
 
+// Helper function to send data to a single master webhook
+const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
+    const webhookUrl = localStorage.getItem('masterWebhookUrl');
+    if (webhookUrl) {
+        const finalPayload = { action, ...payload };
+        try {
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(finalPayload),
+            });
+            if (response.ok) {
+                console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
+            } else {
+                console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+            }
+        } catch (error)
+ {
+            console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
+        }
+    } else {
+        console.log(defaultLogMessage);
+    }
+};
+
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
@@ -100,43 +126,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         serviceBookingDate: new Date(), // Default to today, can be changed
     }
     setTickets(prev => [newTicket, ...prev]);
-    console.log(`[AUTOMATION] Trigger: New Ticket Created. Sending data to Make.com to update Google Sheet and notify technician...`);
-    // In a real app, you would use fetch() to send this data to a Make.com webhook.
+    sendWebhook(
+        'NEW_TICKET', 
+        newTicket,
+        `[AUTOMATION] Trigger: New Ticket Created. Sending data to Make.com... (Master Webhook not configured)`
+    );
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
     const originalTicket = tickets.find(t => t.id === updatedTicket.id);
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
+    // Send a general update for any change
+    sendWebhook(
+        'TICKET_UPDATED',
+        updatedTicket,
+        `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
+    );
+
+    // Also send a specific event if the job was just completed
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
-        console.log(`[AUTOMATION] Trigger: Job Completed. Sending data to Make.com to update Google Sheet and send feedback WhatsApp...`);
+        sendWebhook(
+            'JOB_COMPLETED',
+            updatedTicket,
+            `[AUTOMATION] Trigger: Job Completed. Sending data to Make.com... (Master Webhook not configured)`
+        );
     }
   };
 
   const uploadDamagedPart = (ticketId: string, imageData: string) => {
-    // This function simulates the process of uploading to a backend.
-    console.log(`[AUTOMATION] Trigger: Damaged Part Image Uploaded for Ticket ${ticketId}.`);
-    console.log(`[AUTOMATION] Sending image data to Make.com webhook...`);
+    const payload = { ticketId, imageData, timestamp: new Date().toISOString() };
+    sendWebhook(
+        'DAMAGED_PART_UPLOADED',
+        payload,
+        `[AUTOMATION] Trigger: Damaged Part Image Uploaded for Ticket ${ticketId}. (Master Webhook not configured)`
+    );
     
-    // In a real scenario:
-    // 1. Make.com receives this data.
-    // 2. It uploads the image to Google Drive.
-    // 3. It gets back a shareable URL.
-    // 4. It updates the Google Sheet row for this ticketId with the new URL.
-    
-    // For now, we'll simulate this by adding a fake URL to the ticket in our local state.
+    // This part remains a simulation as the app cannot receive the URL back from Make.com
+    // In a real app, you might poll for an update or use websockets.
     const fakeGoogleDriveUrl = `https://docs.google.com/a-fake-link-to-image/${ticketId}-${Date.now()}.jpg`;
-    
     setTickets(prev => prev.map(t => 
       t.id === ticketId ? { ...t, damagedPartImageUrl: fakeGoogleDriveUrl } : t
     ));
 
-    alert('Damaged part photo has been uploaded and a request sent to admin.');
+    alert('Damaged part photo has been sent to the automation workflow.');
   };
   
   const addFeedback = (feedbackItem: Feedback) => {
     setFeedback(prev => [feedbackItem, ...prev]);
-     console.log(`[AUTOMATION] Trigger: New Feedback Received. Sending data to Make.com to update Google Sheet and notify admin...`);
+    sendWebhook(
+        'NEW_FEEDBACK',
+        feedbackItem,
+        `[AUTOMATION] Trigger: New Feedback Received. Sending data to Make.com... (Master Webhook not configured)`
+    );
   };
 
   const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart };

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { UserRole } from '../types';
@@ -26,31 +25,48 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticketId, onBack }) => {
         )
     }
 
-    const handleGeneratePdf = () => {
+    const handleGeneratePdf = async () => {
         setIsGeneratingPdf(true);
         const technician = technicians.find(t => t.id === ticket.technicianId);
 
-        // 1. Structure the data for the PDF service
+        const ticketData = {
+            ...ticket,
+            createdAt: new Date(ticket.createdAt).toLocaleString(),
+            serviceBookingDate: new Date(ticket.serviceBookingDate).toLocaleDateString(),
+            completedAt: ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A',
+            purchaseDate: ticket.purchaseDate ? new Date(ticket.purchaseDate).toLocaleDateString() : 'N/A',
+            technicianName: technician?.name || 'Unassigned',
+        };
+        
         const payload = {
-            templateId: 'glen-service-report-template', // Example ID for a template on Apitemplate.io
-            data: {
-                ...ticket,
-                createdAt: new Date(ticket.createdAt).toLocaleString(),
-                serviceBookingDate: new Date(ticket.serviceBookingDate).toLocaleDateString(),
-                completedAt: ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A',
-                purchaseDate: ticket.purchaseDate ? new Date(ticket.purchaseDate).toLocaleDateString() : 'N/A',
-                technicianName: technician?.name || 'Unassigned',
-            }
+            action: 'GENERATE_PDF',
+            ...ticketData,
         };
 
-        // 2. Simulate the API call
-        console.log('[AUTOMATION] Generating PDF with payload:', JSON.stringify(payload, null, 2));
-        console.log('[AUTOMATION] Sending data to PDF generation service (e.g., Apitemplate.io)...');
+        const webhookUrl = localStorage.getItem('masterWebhookUrl');
+        if (webhookUrl) {
+            try {
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    alert("PDF has been generated and sent to the customer's contact number via WhatsApp.");
+                } else {
+                    alert(`Failed to generate PDF. The automation service responded with status: ${response.status}.`);
+                }
+            } catch (error) {
+                console.error("Error sending PDF generation request:", error);
+                alert("An error occurred while sending the PDF generation request. Check the console for details.");
+            }
+        } else {
+            console.log('[AUTOMATION] Simulating PDF generation with payload:', JSON.stringify(payload, null, 2));
+            console.log('[AUTOMATION] Master Webhook not configured. To generate a real PDF, configure the URL in Admin Settings.');
+            alert("PDF generation is in simulation mode. The request has been logged to the console.");
+        }
 
-        setTimeout(() => {
-            setIsGeneratingPdf(false);
-            alert("PDF has been generated and sent to the customer's contact number via WhatsApp.");
-        }, 1500);
+        setIsGeneratingPdf(false);
     }
 
     const tabClasses = (tab: DetailsTab) => 
