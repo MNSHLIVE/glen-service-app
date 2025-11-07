@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Ticket } from '../types';
+import { SERVICE_CATEGORIES } from '../data/productData';
 
 interface AddTicketModalProps {
   onClose: () => void;
@@ -79,7 +80,10 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Service Category</label>
-                    <input type="text" value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} placeholder="e.g., Chimney, Cook top" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue" required />
+                     <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md" required>
+                        <option value="">Select Category...</option>
+                        {SERVICE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Complaint</label>

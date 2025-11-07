@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+// Fix: Import PartType and PartWarrantyStatus to correctly type the mock data.
+import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus } from '../types';
 import { TECHNICIANS } from '../constants';
+import { useToast } from './ToastContext';
 
 interface AppContextType {
   user: User | null;
@@ -13,6 +15,10 @@ interface AppContextType {
   updateTicket: (updatedTicket: Ticket) => void;
   uploadDamagedPart: (ticketId: string, imageData: string) => void;
   addFeedback: (feedbackItem: Feedback) => void;
+  addTechnician: (tech: Omit<Technician, 'id'>) => void;
+  updateTechnician: (updatedTech: Technician) => void;
+  deleteTechnician: (techId: string) => void;
+  sendReceipt: (ticketId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -69,6 +75,17 @@ const initialTickets: Ticket[] = [
     cause: 'Faulty heating element due to scaling.',
     reason: 'Element was beyond repair and required replacement.',
     warrantyApplicable: false,
+    amountCollected: 1200,
+    // Fix: Corrected the ReplacedPart object to match the interface definition.
+    // Renamed 'warranty' to 'warrantyDuration' and added missing properties.
+    partsReplaced: [{
+        name: 'Heating Coil',
+        price: 800,
+        type: PartType.Replacement,
+        warrantyStatus: PartWarrantyStatus.OutOfWarranty,
+        category: 'Small Appliances',
+        warrantyDuration: '6 Months'
+    }]
   }
 ];
 
@@ -82,37 +99,52 @@ const initialFeedback: Feedback[] = [
     }
 ]
 
-// Helper function to send data to a single master webhook
-const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
-    const webhookUrl = localStorage.getItem('masterWebhookUrl');
-    if (webhookUrl) {
-        const finalPayload = { action, ...payload };
-        try {
-            const response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(finalPayload),
-            });
-            if (response.ok) {
-                console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
-            } else {
-                console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
-            }
-        } catch (error)
- {
-            console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-        }
-    } else {
-        console.log(defaultLogMessage);
-    }
-};
-
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
-  const [technicians] = useState<Technician[]>(TECHNICIANS);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>(initialFeedback);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    const savedTechs = localStorage.getItem('technicians');
+    if (savedTechs) {
+      setTechnicians(JSON.parse(savedTechs));
+    } else {
+      setTechnicians(TECHNICIANS);
+      localStorage.setItem('technicians', JSON.stringify(TECHNICIANS));
+    }
+  }, []);
+
+  // Helper function to send data to a single master webhook
+  const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
+      const webhookUrl = localStorage.getItem('masterWebhookUrl');
+      const actionName = action.replace(/_/g, ' ').toLowerCase();
+
+      if (webhookUrl) {
+          const finalPayload = { action, ...payload };
+          try {
+              const response = await fetch(webhookUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(finalPayload),
+              });
+              if (response.ok) {
+                  console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
+                  addToast(`Automation for "${actionName}" triggered!`, 'success');
+              } else {
+                  console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+                  addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
+              }
+          } catch (error) {
+              console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
+              addToast(`Failed to send webhook for "${actionName}".`, 'error');
+          }
+      } else {
+          console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
+          addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
+      }
+  };
 
   const login = (loggedInUser: User) => setUser(loggedInUser);
   const logout = () => setUser(null);
@@ -126,9 +158,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         serviceBookingDate: new Date(), // Default to today, can be changed
     }
     setTickets(prev => [newTicket, ...prev]);
+    const technician = technicians.find(t => t.id === newTicket.technicianId);
+    const payload = { ...newTicket, technicianName: technician?.name || 'Unassigned' };
     sendWebhook(
         'NEW_TICKET', 
-        newTicket,
+        payload,
         `[AUTOMATION] Trigger: New Ticket Created. Sending data to Make.com... (Master Webhook not configured)`
     );
   };
@@ -137,51 +171,101 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const originalTicket = tickets.find(t => t.id === updatedTicket.id);
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
-    // Send a general update for any change
+    const technician = technicians.find(t => t.id === updatedTicket.technicianId);
+    const payload = { ...updatedTicket, technicianName: technician?.name || 'Unassigned' };
+    
     sendWebhook(
         'TICKET_UPDATED',
-        updatedTicket,
+        payload,
         `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
     );
 
-    // Also send a specific event if the job was just completed
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
         sendWebhook(
             'JOB_COMPLETED',
-            updatedTicket,
+            payload,
             `[AUTOMATION] Trigger: Job Completed. Sending data to Make.com... (Master Webhook not configured)`
         );
     }
   };
 
   const uploadDamagedPart = (ticketId: string, imageData: string) => {
-    const payload = { ticketId, imageData, timestamp: new Date().toISOString() };
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+    const technician = technicians.find(t => t.id === ticket.technicianId);
+    
+    const payload = { 
+        ticketId, 
+        imageData, 
+        timestamp: new Date().toISOString(),
+        technicianName: technician?.name || 'Unassigned',
+    };
     sendWebhook(
         'DAMAGED_PART_UPLOADED',
         payload,
         `[AUTOMATION] Trigger: Damaged Part Image Uploaded for Ticket ${ticketId}. (Master Webhook not configured)`
     );
     
-    // This part remains a simulation as the app cannot receive the URL back from Make.com
-    // In a real app, you might poll for an update or use websockets.
     const fakeGoogleDriveUrl = `https://docs.google.com/a-fake-link-to-image/${ticketId}-${Date.now()}.jpg`;
     setTickets(prev => prev.map(t => 
       t.id === ticketId ? { ...t, damagedPartImageUrl: fakeGoogleDriveUrl } : t
     ));
-
-    alert('Damaged part photo has been sent to the automation workflow.');
   };
   
   const addFeedback = (feedbackItem: Feedback) => {
     setFeedback(prev => [feedbackItem, ...prev]);
+    const ticket = tickets.find(t => t.id === feedbackItem.ticketId);
+    if (!ticket) return;
+    const technician = technicians.find(t => t.id === ticket.technicianId);
+
+    const payload = { ...feedbackItem, technicianName: technician?.name || 'Unassigned' };
     sendWebhook(
         'NEW_FEEDBACK',
-        feedbackItem,
+        payload,
         `[AUTOMATION] Trigger: New Feedback Received. Sending data to Make.com... (Master Webhook not configured)`
     );
   };
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart };
+  const addTechnician = (tech: Omit<Technician, 'id'>) => {
+      const newTech = { ...tech, id: `tech${Date.now()}` };
+      const updatedTechs = [...technicians, newTech];
+      setTechnicians(updatedTechs);
+      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
+      addToast('Technician added successfully!', 'success');
+  }
+
+  const updateTechnician = (updatedTech: Technician) => {
+      const updatedTechs = technicians.map(t => t.id === updatedTech.id ? updatedTech : t);
+      setTechnicians(updatedTechs);
+      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
+      addToast('Technician updated successfully!', 'success');
+  }
+
+  const deleteTechnician = (techId: string) => {
+      const updatedTechs = technicians.filter(t => t.id !== techId);
+      setTechnicians(updatedTechs);
+      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
+      addToast('Technician removed successfully!', 'success');
+  }
+
+  const sendReceipt = (ticketId: string) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+    const technician = technicians.find(t => t.id === ticket.technicianId);
+
+    const payload = {
+        ticket,
+        technicianName: technician?.name || 'Unassigned',
+    };
+    sendWebhook(
+        'GENERATE_RECEIPT',
+        payload,
+        `[AUTOMATION] Trigger: Receipt Generated for Ticket ${ticketId}. (Master Webhook not configured)`
+    );
+  };
+
+
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt };
 
   return (
     <AppContext.Provider value={contextValue}>

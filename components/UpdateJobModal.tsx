@@ -1,163 +1,88 @@
-
 import React, { useState } from 'react';
-import { useAppContext } from '../context/AppContext';
-import { Ticket, PaymentStatus, TicketStatus, ServiceChecklist } from '../types';
+import { ReplacedPart, PartType, PartWarrantyStatus } from '../types';
+import { PART_CATEGORIES } from '../data/productData';
 
-interface ServiceUpdateProps {
-  ticket: Ticket;
-  onUpdate: () => void;
+interface AddPartModalProps {
+  onClose: () => void;
+  onAddPart: (part: ReplacedPart) => void;
 }
 
-const ServiceUpdate: React.FC<ServiceUpdateProps> = ({ ticket, onUpdate }) => {
-  const { updateTicket, uploadDamagedPart } = useAppContext();
-  
-  const [workDone, setWorkDone] = useState(ticket.workDone || '');
-  const [cause, setCause] = useState(ticket.cause || '');
-  const [reason, setReason] = useState(ticket.reason || '');
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(ticket.paymentStatus || PaymentStatus.Pending);
-  const [remarks, setRemarks] = useState(ticket.remarks || '');
-  const [photo, setPhoto] = useState<string | null>(ticket.photoUrl || null);
-  const [damagedPartPhoto, setDamagedPartPhoto] = useState<string | null>(null);
+const AddPartModal: React.FC<AddPartModalProps> = ({ onClose, onAddPart }) => {
+    const [name, setName] = useState('');
+    const [price, setPrice] = useState<number | ''>('');
+    const [type, setType] = useState<PartType>(PartType.Repair);
+    const [warrantyStatus, setWarrantyStatus] = useState<PartWarrantyStatus>(PartWarrantyStatus.OutOfWarranty);
+    const [category, setCategory] = useState(PART_CATEGORIES[0]);
+    const [warrantyDuration, setWarrantyDuration] = useState('N/A');
 
-  const [checklist, setChecklist] = useState<ServiceChecklist>(ticket.serviceChecklist || {
-    concernInformed: false,
-    replacedPartsShown: false,
-    taggingDone: false,
-    siteCleaned: false,
-    amcDiscussion: false,
-    partsGivenToCustomer: false,
-    cashReceiptHanded: false,
-  });
-
-  const handleChecklistChange = (field: keyof ServiceChecklist) => {
-      setChecklist(prev => ({ ...prev, [field]: !prev[field] }));
-  }
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'completion' | 'damaged') => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (type === 'completion') {
-            setPhoto(result);
-        } else {
-            setDamagedPartPhoto(result);
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name || price === '' || !category) {
+            alert('Please fill all required fields.');
+            return;
         }
-      };
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
 
-  const handleDamagedPartUpload = () => {
-    if (damagedPartPhoto) {
-        uploadDamagedPart(ticket.id, damagedPartPhoto);
-    } else {
-        alert('Please select a photo of the damaged part first.');
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workDone) {
-        alert('Please describe the work done.');
-        return;
-    }
-    const updatedTicket: Ticket = {
-      ...ticket,
-      status: TicketStatus.Completed,
-      completedAt: new Date(),
-      workDone,
-      cause,
-      reason,
-      paymentStatus,
-      remarks,
-      photoUrl: photo || undefined,
-      serviceChecklist: checklist,
+        onAddPart({
+            name,
+            price: Number(price),
+            type,
+            warrantyStatus,
+            category,
+            warrantyDuration,
+        });
+        onClose();
     };
-    updateTicket(updatedTicket);
-    onUpdate();
-  };
 
-  const checklistItems: {key: keyof ServiceChecklist, label: string}[] = [
-      { key: 'concernInformed', label: 'Concern informed to Customer' },
-      { key: 'replacedPartsShown', label: 'Replaced Parts Shown to Customer' },
-      { key: 'taggingDone', label: 'Tagging done on Replaced part' },
-      { key: 'siteCleaned', label: 'Site Cleaned Post Service' },
-      { key: 'amcDiscussion', label: 'AMC discussion, if any' },
-      { key: 'partsGivenToCustomer', label: 'Parts given to customer if Charged' },
-      { key: 'cashReceiptHanded', label: 'Cash Receipt handed over, if any' },
-  ];
-
-  return (
-    <div className="bg-white rounded-lg w-full">
-        <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* New Damaged Part Section */}
-            <div className="p-4 border rounded-lg bg-gray-50">
-                 <h4 className="text-lg font-semibold text-gray-700 mb-2">Inventory Request</h4>
-                 <label className="block text-sm font-medium text-gray-700">Upload Damaged Part Photo</label>
-                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, 'damaged')} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-glen-light-blue file:text-glen-blue hover:file:bg-blue-100"/>
-                 {damagedPartPhoto && !ticket.damagedPartImageUrl && <img src={damagedPartPhoto} alt="Damaged part preview" className="mt-2 rounded-lg max-h-40" />}
-                 
-                 {ticket.damagedPartImageUrl ? (
-                    <div className="mt-2 text-sm text-green-700 bg-green-100 p-2 rounded-md">
-                        <p>Image uploaded successfully. <a href={ticket.damagedPartImageUrl} target="_blank" rel="noopener noreferrer" className="font-bold underline">View Image</a></p>
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+                <div className="p-6">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-gray-800">Add Part Details</h3>
+                        <button onClick={onClose} className="text-2xl text-gray-500 hover:text-gray-800">&times;</button>
                     </div>
-                 ) : (
-                    <button type="button" onClick={handleDamagedPartUpload} className="mt-3 w-full bg-glen-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
-                        Send Inventory Request
-                    </button>
-                 )}
-            </div>
-
-
-            <div>
-                <h4 className="text-lg font-semibold text-gray-700 mb-2">Service Checklist</h4>
-                <div className="space-y-2">
-                    {checklistItems.map(item => (
-                         <label key={item.key} className="flex items-center text-sm text-gray-800">
-                            <input type="checkbox" checked={checklist[item.key]} onChange={() => handleChecklistChange(item.key)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
-                            <span className="ml-3">{item.label}</span>
-                        </label>
-                    ))}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Select Type*</label>
+                            <select value={type} onChange={e => setType(e.target.value as PartType)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md">
+                                {Object.values(PartType).map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Select Warranty Status*</label>
+                            <select value={warrantyStatus} onChange={e => setWarrantyStatus(e.target.value as PartWarrantyStatus)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md">
+                                {Object.values(PartWarrantyStatus).map(ws => <option key={ws} value={ws}>{ws}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Select Category*</label>
+                            <select value={category} onChange={e => setCategory(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md">
+                                {PART_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                               <label className="block text-sm font-medium text-gray-700">Part Name*</label>
+                               <input type="text" value={name} onChange={e => setName(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required />
+                            </div>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700">Price*</label>
+                               <input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required />
+                            </div>
+                        </div>
+                         <div>
+                           <label className="block text-sm font-medium text-gray-700">Warranty Duration</label>
+                           <input type="text" value={warrantyDuration} onChange={e => setWarrantyDuration(e.target.value)} placeholder="e.g., 6 Months" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+                        </div>
+                        <div className="flex justify-end space-x-3 pt-4">
+                            <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                            <button type="submit" className="bg-red-500 text-white font-bold py-2 px-6 rounded-lg">ADD</button>
+                        </div>
+                    </form>
                 </div>
             </div>
-
-            <div className="pt-2">
-                <label className="block text-sm font-medium text-gray-700">Cause of Issue</label>
-                <textarea value={cause} onChange={e => setCause(e.target.value)} rows={2} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"></textarea>
-            </div>
-             <div>
-                <label className="block text-sm font-medium text-gray-700">Reason for Action</label>
-                <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"></textarea>
-            </div>
-             <div>
-                <label className="block text-sm font-medium text-gray-700">Work Done (Action)</label>
-                <textarea value={workDone} onChange={e => setWorkDone(e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue" required></textarea>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Payment Collected</label>
-                <select value={paymentStatus} onChange={e => setPaymentStatus(e.target.value as PaymentStatus)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md">
-                    {Object.values(PaymentStatus).map(status => <option key={status} value={status}>{status}</option>)}
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Remarks</label>
-                <textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={2} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"></textarea>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Upload Completion Photo (optional)</label>
-                <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, 'completion')} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-glen-light-blue file:text-glen-blue hover:file:bg-blue-100"/>
-                {photo && <img src={photo} alt="Upload preview" className="mt-2 rounded-lg max-h-40" />}
-            </div>
-            <div className="pt-4">
-                <button type="submit" className="w-full bg-glen-red text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors text-lg">
-                    {ticket.status === TicketStatus.Completed ? 'Update Job' : 'Complete Job'}
-                </button>
-            </div>
-        </form>
-    </div>
-  );
+        </div>
+    );
 };
 
-export default ServiceUpdate;
+export default AddPartModal;

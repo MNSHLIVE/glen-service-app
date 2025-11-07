@@ -1,4 +1,3 @@
-
 export enum UserRole {
   Admin = 'Admin',
   Technician = 'Technician',
@@ -39,6 +38,25 @@ export interface ServiceChecklist {
     cashReceiptHanded: boolean;
 }
 
+export enum PartType {
+    Repair = 'Repair',
+    Replacement = 'Replacement',
+}
+
+export enum PartWarrantyStatus {
+    InWarranty = 'In-Warranty',
+    OutOfWarranty = 'Out Of Warranty',
+}
+
+export interface ReplacedPart {
+    name: string;
+    price: number;
+    type: PartType;
+    warrantyStatus: PartWarrantyStatus;
+    category: string;
+    warrantyDuration: string;
+}
+
 export interface Ticket {
   id: string;
   customerName: string;
@@ -73,6 +91,8 @@ export interface Ticket {
   cause?: string;
   reason?: string;
   warrantyApplicable?: boolean;
+  amountCollected?: number;
+  partsReplaced?: ReplacedPart[];
 }
 
 export interface Feedback {
@@ -81,4 +101,10 @@ export interface Feedback {
   rating: number; // 1-5
   comment?: string;
   createdAt: Date;
+}
+
+export interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error';
 }
