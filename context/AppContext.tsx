@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
+import { COMPLAINT_SHEET_HEADERS, UPDATE_SHEET_HEADERS } from '../data/sheetHeaders';
 
 interface AppContextType {
   user: User | null;
@@ -19,6 +20,7 @@ interface AppContextType {
   updateTechnician: (updatedTech: Technician) => void;
   deleteTechnician: (techId: string) => void;
   sendReceipt: (ticketId: string) => void;
+  initializeSheets: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -159,7 +161,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     setTickets(prev => [newTicket, ...prev]);
     const technician = technicians.find(t => t.id === newTicket.technicianId);
-    const payload = { ...newTicket, technicianName: technician?.name || 'Unassigned' };
+    
+    // Payload for the COMPLAINT_SHEET
+    const payload = { 
+        ticket: newTicket,
+        technicianName: technician?.name || 'Unassigned'
+    };
+
     sendWebhook(
         'NEW_TICKET', 
         payload,
@@ -172,7 +180,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
     const technician = technicians.find(t => t.id === updatedTicket.technicianId);
-    const payload = { ...updatedTicket, technicianName: technician?.name || 'Unassigned' };
+    const payload = { 
+        ticket: updatedTicket, 
+        technicianName: technician?.name || 'Unassigned'
+    };
     
     sendWebhook(
         'TICKET_UPDATED',
@@ -180,6 +191,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
     );
 
+    // If the job is completed, send a payload specifically for the UPDATE_SHEET
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
         sendWebhook(
             'JOB_COMPLETED',
@@ -263,9 +275,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `[AUTOMATION] Trigger: Receipt Generated for Ticket ${ticketId}. (Master Webhook not configured)`
     );
   };
+  
+  const initializeSheets = () => {
+    const payload = {
+      complaintSheetHeaders: COMPLAINT_SHEET_HEADERS,
+      updateSheetHeaders: UPDATE_SHEET_HEADERS,
+    };
+    sendWebhook(
+      'INITIALIZE_SHEETS',
+      payload,
+      `[AUTOMATION] Trigger: Initialize Google Sheets. (Master Webhook not configured)`
+    );
+  };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets };
 
   return (
     <AppContext.Provider value={contextValue}>

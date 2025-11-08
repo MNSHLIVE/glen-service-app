@@ -34,42 +34,85 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 
 const AutomationSettings: React.FC = () => {
+  const { initializeSheets } = useAppContext();
   const [masterWebhookUrl, setMasterWebhookUrl] = useState('');
-  // Fix: useToast provides the addToast function, not useAppContext.
+  const [complaintSheetUrl, setComplaintSheetUrl] = useState('');
+  const [updateSheetUrl, setUpdateSheetUrl] = useState('');
   const { addToast } = useToast();
-
 
   useEffect(() => {
     const defaultWebhookUrl = 'https://hook.eu2.make.com/ohvxcesvh1dwr7ejl1f2c7v4ed5sxovn';
-    const loadedUrl = localStorage.getItem('masterWebhookUrl') || defaultWebhookUrl;
-    setMasterWebhookUrl(loadedUrl);
+    setMasterWebhookUrl(localStorage.getItem('masterWebhookUrl') || defaultWebhookUrl);
+    setComplaintSheetUrl(localStorage.getItem('complaintSheetUrl') || '');
+    setUpdateSheetUrl(localStorage.getItem('updateSheetUrl') || '');
   }, []);
 
   const handleSave = () => {
     localStorage.setItem('masterWebhookUrl', masterWebhookUrl);
-    // Fix: Directly call addToast. The useToast hook ensures it's available.
+    localStorage.setItem('complaintSheetUrl', complaintSheetUrl);
+    localStorage.setItem('updateSheetUrl', updateSheetUrl);
     addToast('Settings saved!', 'success');
   };
   
+  const handleInitialize = () => {
+    if (!complaintSheetUrl || !updateSheetUrl) {
+        addToast('Please provide URLs for both sheets before initializing.', 'error');
+        return;
+    }
+    handleSave(); // Save URLs before initializing
+    initializeSheets();
+  }
+
    return (
-    <div>
-      <p className="text-sm text-gray-600 mb-6 bg-gray-50 p-3 rounded-lg border">
-        Enter your single, master webhook URL from your automation service (e.g., Make.com). All app events will be sent to this one URL.
-      </p>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
-          <input
-            type="url"
-            value={masterWebhookUrl}
-            onChange={(e) => setMasterWebhookUrl(e.target.value)}
-            placeholder="https://hook.make.com/..."
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
-          />
+    <div className="space-y-6">
+      <div>
+        <h4 className="text-lg font-semibold text-gray-800 mb-2">Webhook Configuration</h4>
+        <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border">
+            Enter your single, master webhook URL from your automation service (e.g., Make.com). All app events will be sent to this one URL.
+        </p>
+        <div className="space-y-4">
+            <div>
+            <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
+            <input
+                type="url"
+                value={masterWebhookUrl}
+                onChange={(e) => setMasterWebhookUrl(e.target.value)}
+                placeholder="https://hook.make.com/..."
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
+            />
+            </div>
         </div>
       </div>
-      <div className="flex justify-end pt-6">
-        <button type="button" onClick={handleSave} className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors">Save Settings</button>
+
+      <div className="border-t pt-6">
+        <h4 className="text-lg font-semibold text-gray-800 mb-2">Google Sheets Setup</h4>
+        <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border">
+            Create two blank Google Sheets. Paste their URLs below and click "Initialize". This will automatically add all the necessary columns to your sheets.
+        </p>
+         <div>
+            <label className="block text-sm font-medium text-gray-700">Sheet 1: Complaint Sheet URL</label>
+            <input
+                type="url"
+                value={complaintSheetUrl}
+                onChange={(e) => setComplaintSheetUrl(e.target.value)}
+                placeholder="URL for the sheet where new tickets are logged"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
+        </div>
+        <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Sheet 2: Technician Update Sheet URL</label>
+            <input
+                type="url"
+                value={updateSheetUrl}
+                onChange={(e) => setUpdateSheetUrl(e.target.value)}
+                placeholder="URL for the sheet where final job updates are logged"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
+        </div>
+        <div className="flex justify-end pt-6 items-center space-x-4">
+            <button type="button" onClick={handleInitialize} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors">Initialize Sheets</button>
+            <button type="button" onClick={handleSave} className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors">Save Settings</button>
+        </div>
       </div>
     </div>
    )
