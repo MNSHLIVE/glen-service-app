@@ -162,7 +162,7 @@ const TechnicianManagement: React.FC = () => {
                                 <>
                                     <div>
                                         <p className="font-semibold">{tech.name}</p>
-                                        <p className="text-sm text-gray-500">PIN: {tech.password}</p>
+                                        <p className="text-sm text-gray-500">PIN: {tech.password} | Points: {tech.points}</p>
                                     </div>
                                     <div className="space-x-2">
                                         <button onClick={() => setEditingTech(tech)} className="text-sm bg-gray-200 py-1 px-3 rounded-lg">Edit</button>

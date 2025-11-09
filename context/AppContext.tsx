@@ -16,11 +16,12 @@ interface AppContextType {
   updateTicket: (updatedTicket: Ticket) => void;
   uploadDamagedPart: (ticketId: string, imageData: string) => void;
   addFeedback: (feedbackItem: Feedback) => void;
-  addTechnician: (tech: Omit<Technician, 'id'>) => void;
+  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => void;
   updateTechnician: (updatedTech: Technician) => void;
   deleteTechnician: (techId: string) => void;
   sendReceipt: (ticketId: string) => void;
   initializeSheets: () => void;
+  resetAllTechnicianPoints: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -78,6 +79,7 @@ const initialTickets: Ticket[] = [
     reason: 'Element was beyond repair and required replacement.',
     warrantyApplicable: false,
     amountCollected: 1200,
+    pointsAwarded: true, // Assuming points were already given for this old completed job
     // Fix: Corrected the ReplacedPart object to match the interface definition.
     // Renamed 'warranty' to 'warrantyDuration' and added missing properties.
     partsReplaced: [{
@@ -191,8 +193,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
     );
 
-    // If the job is completed, send a payload specifically for the UPDATE_SHEET
+    // If the job is completed, award points and send a payload for the UPDATE_SHEET
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
+        if (!updatedTicket.pointsAwarded) {
+            const updatedTechs = technicians.map(t => {
+                if (t.id === updatedTicket.technicianId) {
+                    addToast(`${t.name} earned 250 points!`, 'success');
+                    return { ...t, points: t.points + 250 };
+                }
+                return t;
+            });
+            setTechnicians(updatedTechs);
+            localStorage.setItem('technicians', JSON.stringify(updatedTechs));
+            updatedTicket.pointsAwarded = true; // Mark points as awarded
+            setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t)); // Save the flag change
+        }
+
         sendWebhook(
             'JOB_COMPLETED',
             payload,
@@ -238,8 +254,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const addTechnician = (tech: Omit<Technician, 'id'>) => {
-      const newTech = { ...tech, id: `tech${Date.now()}` };
+  const addTechnician = (tech: Omit<Technician, 'id' | 'points'>) => {
+      const newTech = { ...tech, id: `tech${Date.now()}`, points: 0 };
       const updatedTechs = [...technicians, newTech];
       setTechnicians(updatedTechs);
       localStorage.setItem('technicians', JSON.stringify(updatedTechs));
@@ -288,8 +304,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
+  const resetAllTechnicianPoints = () => {
+    if (window.confirm('Are you sure you want to reset all technician points to zero? This action cannot be undone.')) {
+        const resetTechs = technicians.map(t => ({...t, points: 0}));
+        setTechnicians(resetTechs);
+        localStorage.setItem('technicians', JSON.stringify(resetTechs));
+        addToast('All technician points have been reset to 0.', 'success');
+    }
+  };
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets };
+
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets, resetAllTechnicianPoints };
 
   return (
     <AppContext.Provider value={contextValue}>

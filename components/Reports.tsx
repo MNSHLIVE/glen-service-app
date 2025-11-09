@@ -152,10 +152,10 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticketId, onBack }) => {
     }
 
     const TABS: { id: DetailsTab; label: string; roles: UserRole[] }[] = [
-        { id: 'DETAILS', label: 'Details', roles: [UserRole.Admin] },
-        { id: 'PART_UPDATE', label: 'Part Update', roles: [UserRole.Admin, UserRole.Technician] },
-        { id: 'SERVICE_CHECKLIST', label: 'Service Checklist', roles: [UserRole.Admin, UserRole.Technician] },
-        { id: 'JOB_COMPLETION', label: 'Job Completion', roles: [UserRole.Admin, UserRole.Technician] },
+        { id: 'DETAILS', label: 'Details', roles: [UserRole.Admin, UserRole.Coordinator] },
+        { id: 'PART_UPDATE', label: 'Part Update', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
+        { id: 'SERVICE_CHECKLIST', label: 'Service Checklist', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
+        { id: 'JOB_COMPLETION', label: 'Job Completion', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
     ];
     
     const availableTabs = TABS.filter(tab => user && tab.roles.includes(user.role));
@@ -353,6 +353,11 @@ const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket
         // Timeout to allow state to update before saving and navigating back
         setTimeout(onJobComplete, 100);
     }
+    
+    const handleQuickAddAmount = (amount: number) => {
+        const currentAmount = ticket.amountCollected || 0;
+        handleChange('amountCollected', currentAmount + amount);
+    };
 
     return (
         <div className="space-y-4">
@@ -384,7 +389,12 @@ const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Amount</label>
-                    <input type="number" value={ticket.amountCollected || ''} onChange={e => handleChange('amountCollected', Number(e.target.value))} placeholder="e.g., 500" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                    <input type="number" value={ticket.amountCollected || ''} onChange={e => handleChange('amountCollected', e.target.value === '' ? '' : Number(e.target.value))} placeholder="e.g., 500" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                     <div className="flex space-x-2 mt-2">
+                        <button onClick={() => handleQuickAddAmount(50)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹50</button>
+                        <button onClick={() => handleQuickAddAmount(100)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹100</button>
+                        <button onClick={() => handleQuickAddAmount(500)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹500</button>
+                    </div>
                 </div>
             </div>
             <div>

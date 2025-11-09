@@ -55,7 +55,7 @@ const UpdateStatusModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ 
 const JobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
   const { user } = useAppContext();
   
-  if (user?.role === UserRole.Admin) {
+  if (user?.role === UserRole.Admin || user?.role === UserRole.Coordinator) {
     return <AdminJobCard ticket={ticket} onViewDetails={onViewDetails} />;
   }
   
@@ -152,14 +152,22 @@ const TechnicianJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) =>
           </span>
         </div>
 
-        <div className="mt-4 space-y-2 text-sm text-gray-600">
-          <p><strong>Complaint:</strong> {ticket.complaint}</p>
-          <p><strong>Address:</strong> {ticket.address}</p>
-          <p><strong>Time:</strong> {ticket.preferredTime}</p>
+        <div className="mt-4 space-y-3 text-sm text-gray-700">
+          <p><strong className="text-gray-500">Complaint:</strong> {ticket.complaint}</p>
+          <p><strong className="text-gray-500">Address:</strong> {ticket.address}</p>
+          <p><strong className="text-gray-500">Time:</strong> {ticket.preferredTime}</p>
+           <div className="flex items-center space-x-2">
+                <strong className="text-gray-500">Phone:</strong>
+                <span>{ticket.phone}</span>
+            </div>
         </div>
-
-        <div className="mt-4 pt-4 border-t">
-            <button onClick={() => onViewDetails(ticket.id)} className="w-full bg-glen-blue text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+        
+        <div className="mt-4 pt-4 border-t flex space-x-2">
+             <a href={`tel:${ticket.phone}`} className="flex-1 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-2">
+                <PhoneIcon />
+                <span>Call Customer</span>
+            </a>
+            <button onClick={() => onViewDetails(ticket.id)} className="flex-1 bg-glen-blue text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors">
                 View Details
             </button>
         </div>

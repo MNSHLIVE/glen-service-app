@@ -1,5 +1,6 @@
 export enum UserRole {
   Admin = 'Admin',
+  Coordinator = 'Coordinator',
   Technician = 'Technician',
 }
 
@@ -13,6 +14,7 @@ export interface Technician {
   id: string;
   name: string;
   password?: string; // For mock login
+  points: number; // For gamification/leaderboard
 }
 
 export enum TicketStatus {
@@ -93,6 +95,7 @@ export interface Ticket {
   warrantyApplicable?: boolean;
   amountCollected?: number;
   partsReplaced?: ReplacedPart[];
+  pointsAwarded?: boolean; // Flag to check if points have been given for this ticket
 }
 
 export interface Feedback {

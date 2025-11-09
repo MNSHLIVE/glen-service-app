@@ -6,13 +6,14 @@ import ViewJobs from './ViewJobs';
 import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
+import PerformanceView from './PerformanceView'; // Import the new PerformanceView
 import { Ticket } from '../types';
 
 interface AdminDashboardProps {
     onViewTicket: (ticketId: string) => void;
 }
 
-type AdminView = 'jobs' | 'ratings';
+type AdminView = 'jobs' | 'ratings' | 'performance';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
   const { user, logout } = useAppContext();
@@ -88,7 +89,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
             View Jobs
           </button>
           <button onClick={() => setActiveView('ratings')} className={navButtonClasses('ratings')}>
-            Technician Ratings
+            Ratings
+          </button>
+          <button onClick={() => setActiveView('performance')} className={navButtonClasses('performance')}>
+            Performance
           </button>
         </nav>
       </div>
@@ -96,6 +100,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
       <div className="bg-white p-4 rounded-lg shadow-md min-h-[400px]">
         {activeView === 'jobs' && <ViewJobs onViewTicket={onViewTicket} />}
         {activeView === 'ratings' && <TechnicianRatings />}
+        {activeView === 'performance' && <PerformanceView />}
       </div>
 
       {isManualModalOpen && <AddTicketModal onClose={handleCloseManualModal} initialData={parsedTicketData} />}

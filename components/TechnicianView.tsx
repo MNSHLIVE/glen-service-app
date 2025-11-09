@@ -9,9 +9,10 @@ interface TechnicianViewProps {
 }
 
 const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
-  const { user, tickets, logout } = useAppContext();
+  const { user, tickets, logout, technicians } = useAppContext();
   const [filter, setFilter] = useState<TicketStatus | 'All'>('All');
 
+  const currentTechnician = technicians.find(t => t.id === user?.id);
   const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
   const filteredTickets = filter === 'All' ? technicianTickets : technicianTickets.filter(t => t.status === filter);
 
@@ -30,6 +31,12 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
         <button onClick={logout} className="text-sm bg-glen-red text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
           Logout
         </button>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow-md text-center">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Monthly Points</h3>
+        <p className="text-4xl font-bold text-glen-blue mt-1">{currentTechnician?.points || 0}</p>
+        <p className="text-xs text-gray-400 mt-1">Keep up the great work!</p>
       </div>
 
       <div className="bg-white p-3 rounded-lg shadow-md">
