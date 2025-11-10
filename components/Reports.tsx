@@ -152,10 +152,10 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticketId, onBack }) => {
     }
 
     const TABS: { id: DetailsTab; label: string; roles: UserRole[] }[] = [
-        { id: 'DETAILS', label: 'Details', roles: [UserRole.Admin, UserRole.Coordinator] },
-        { id: 'PART_UPDATE', label: 'Part Update', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
-        { id: 'SERVICE_CHECKLIST', label: 'Service Checklist', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
-        { id: 'JOB_COMPLETION', label: 'Job Completion', roles: [UserRole.Admin, UserRole.Technician, UserRole.Coordinator] },
+        { id: 'DETAILS', label: 'Details', roles: [UserRole.Admin] },
+        { id: 'PART_UPDATE', label: 'Part Update', roles: [UserRole.Admin, UserRole.Technician] },
+        { id: 'SERVICE_CHECKLIST', label: 'Service Checklist', roles: [UserRole.Admin, UserRole.Technician] },
+        { id: 'JOB_COMPLETION', label: 'Job Completion', roles: [UserRole.Admin, UserRole.Technician] },
     ];
     
     const availableTabs = TABS.filter(tab => user && tab.roles.includes(user.role));

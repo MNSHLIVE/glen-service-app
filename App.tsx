@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useAppContext } from './context/AppContext';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
-import CoordinatorDashboard from './components/CoordinatorDashboard';
 import TechnicianView from './components/TechnicianView';
 import TicketDetails from './components/Reports'; // Reports.tsx is repurposed as TicketDetails
 import { UserRole } from './types';
@@ -45,10 +44,6 @@ const App: React.FC = () => {
     
     if (user.role === UserRole.Admin) {
       return <AdminDashboard onViewTicket={handleViewTicket} />;
-    }
-
-    if (user.role === UserRole.Coordinator) {
-      return <CoordinatorDashboard onViewTicket={handleViewTicket} />;
     }
     
     if (user.role === UserRole.Technician) {

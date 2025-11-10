@@ -55,7 +55,7 @@ const UpdateStatusModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ 
 const JobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
   const { user } = useAppContext();
   
-  if (user?.role === UserRole.Admin || user?.role === UserRole.Coordinator) {
+  if (user?.role === UserRole.Admin) {
     return <AdminJobCard ticket={ticket} onViewDetails={onViewDetails} />;
   }
   

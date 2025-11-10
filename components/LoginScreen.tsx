@@ -4,7 +4,6 @@ import { useAppContext } from '../context/AppContext';
 import { UserRole } from '../types';
 
 const ADMIN_PINS = ['999', '222'];
-const COORDINATOR_PINS = ['555'];
 
 const LoginScreen: React.FC = () => {
   const [pin, setPin] = useState('');
@@ -19,11 +18,6 @@ const LoginScreen: React.FC = () => {
       return;
     }
 
-    if (COORDINATOR_PINS.includes(pin)) {
-      login({ id: 'coord01', name: 'Coordinator', role: UserRole.Coordinator });
-      return;
-    }
-
     const foundTechnician = technicians.find(t => t.password === pin);
     if (foundTechnician) {
       login({ id: foundTechnician.id, name: foundTechnician.name, role: UserRole.Technician });
@@ -32,7 +26,7 @@ const LoginScreen: React.FC = () => {
     
     // Check for potential partial matches to avoid premature error messages
     const isPartialMatch = technicians.some(t => t.password?.startsWith(pin));
-    if (!isPartialMatch && pin.length >= 3 && !ADMIN_PINS.some(p => p.startsWith(pin)) && !COORDINATOR_PINS.some(p => p.startsWith(pin))) {
+    if (!isPartialMatch && pin.length >= 3 && !ADMIN_PINS.some(p => p.startsWith(pin))) {
         setError('Invalid PIN');
         const timer = setTimeout(() => setError(''), 1000);
         return () => clearTimeout(timer);
