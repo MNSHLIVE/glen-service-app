@@ -94,7 +94,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               }
           } catch (error) {
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-              addToast(`Failed to send webhook for "${actionName}".`, 'error');
+              addToast(`Failed to send webhook for "${actionName}". Check your internet and ensure the Make.com scenario is ON.`, 'error');
           }
       } else {
           console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
@@ -164,7 +164,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     } catch (error) {
       console.error('[SYNC] Error syncing tickets:', error);
-      addToast('Failed to sync jobs from Google Sheets.', 'error');
+      addToast('Sync failed. Check your internet and ensure the Make.com scenario is ON.', 'error');
     } finally {
       setIsSyncing(false);
     }

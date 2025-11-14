@@ -273,20 +273,14 @@ const PartUpdateTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | 
 
 const ServiceChecklistTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | null) => Ticket | null) => void }> = ({ ticket, setTicket }) => {
     const checklistItems: {key: keyof ServiceChecklist, label: string}[] = [
-      { key: 'concernInformed', label: 'Concern informed to Customer' },
-      { key: 'replacedPartsShown', label: 'Replaced Parts Shown to Customer' },
-      { key: 'taggingDone', label: 'Tagging done on Replaced part' },
-      { key: 'siteCleaned', label: 'Site Cleaned Post Service' },
       { key: 'amcDiscussion', label: 'AMC discussion, if any' },
-      { key: 'partsGivenToCustomer', label: 'Parts given to customer if Charged' },
-      { key: 'cashReceiptHanded', label: 'Cash Receipt handed over, if any' },
     ];
     
     const handleChecklistChange = (field: keyof ServiceChecklist) => {
         setTicket(prev => {
             if (!prev) return null;
             const currentChecklist = prev.serviceChecklist || {
-                concernInformed: false, replacedPartsShown: false, taggingDone: false, siteCleaned: false, amcDiscussion: false, partsGivenToCustomer: false, cashReceiptHanded: false
+                amcDiscussion: false
             };
             return {
                 ...prev,
@@ -301,7 +295,7 @@ const ServiceChecklistTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Tic
     return (
         <div>
             <h4 className="text-lg font-semibold text-gray-800 mb-4">Service Checklist</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+            <div className="space-y-3">
                 {checklistItems.map(item => (
                      <label key={item.key} className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
                         <input type="checkbox" checked={ticket.serviceChecklist?.[item.key] || false} onChange={() => handleChecklistChange(item.key)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
@@ -314,36 +308,11 @@ const ServiceChecklistTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Tic
 }
 
 const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | null) => Ticket | null) => void, onJobComplete: () => void }> = ({ ticket, setTicket, onJobComplete }) => {
-    const { uploadDamagedPart } = useAppContext();
-    const [damagedPartPhoto, setDamagedPartPhoto] = useState<string | null>(null);
 
     const handleChange = (field: keyof Ticket, value: any) => {
         setTicket(prev => prev ? ({ ...prev, [field]: value }) : null);
     };
-
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'completion' | 'damaged') => {
-        if (e.target.files && e.target.files[0]) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const result = event.target?.result as string;
-            if (type === 'completion') {
-                handleChange('photoUrl', result);
-            } else {
-                setDamagedPartPhoto(result);
-            }
-          };
-          reader.readAsDataURL(e.target.files[0]);
-        }
-    };
     
-    const handleDamagedPartUpload = () => {
-        if (damagedPartPhoto) {
-            uploadDamagedPart(ticket.id, damagedPartPhoto);
-        } else {
-            alert('Please select a photo of the damaged part first.');
-        }
-    };
-
     const handleCompleteJob = () => {
         if (!ticket.workDone) {
             alert('Please describe the work done before completing the job.');
@@ -361,21 +330,6 @@ const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket
 
     return (
         <div className="space-y-4">
-             <div className="p-4 border rounded-lg bg-gray-50">
-                 <h4 className="text-lg font-semibold text-gray-700 mb-2">Inventory Request</h4>
-                 <label className="block text-sm font-medium text-gray-700">Upload Damaged Part Photo</label>
-                 <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, 'damaged')} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-glen-light-blue file:text-glen-blue hover:file:bg-blue-100"/>
-                 {damagedPartPhoto && !ticket.damagedPartImageUrl && <img src={damagedPartPhoto} alt="Damaged part preview" className="mt-2 rounded-lg max-h-40" />}
-                 {ticket.damagedPartImageUrl ? (
-                    <div className="mt-2 text-sm text-green-700 bg-green-100 p-2 rounded-md">
-                        <p>Image uploaded. <a href={ticket.damagedPartImageUrl} target="_blank" rel="noopener noreferrer" className="font-bold underline">View Image</a></p>
-                    </div>
-                 ) : (
-                    <button type="button" onClick={handleDamagedPartUpload} disabled={!damagedPartPhoto} className="mt-3 w-full bg-glen-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
-                        Send Inventory Request
-                    </button>
-                 )}
-            </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700">Work Done (Action)</label>
                 <textarea value={ticket.workDone || ''} onChange={e => handleChange('workDone', e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
@@ -398,9 +352,10 @@ const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket
                 </div>
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700">Upload Completion Photo</label>
-                <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, 'completion')} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-glen-light-blue file:text-glen-blue hover:file:bg-blue-100"/>
-                {ticket.photoUrl && <img src={ticket.photoUrl} alt="Upload preview" className="mt-2 rounded-lg max-h-40" />}
+                <label className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={ticket.freeService || false} onChange={e => handleChange('freeService', e.target.checked)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
+                    <span className="ml-3 font-medium">Mark as Free Service (e.g., Warranty, Goodwill)</span>
+                </label>
             </div>
             <div className="pt-4">
                 <button type="button" onClick={handleCompleteJob} className="w-full bg-glen-red text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors text-lg">

@@ -58,20 +58,12 @@ export const UPDATE_SHEET_HEADERS = [
     'Work Done Summary',
     'Amount Collected',
     'Payment Status',
+    'Points Awarded', // New column for points
     'Parts Replaced (Name | Price | Warranty)',
 
-    // Checklist Info
-    'Concern Informed',
-    'Replaced Parts Shown',
-    'Tagging Done',
-    'Site Cleaned',
+    // Simplified Checklist & Status
     'AMC Discussion',
-    'Parts Given to Customer',
-    'Cash Receipt Handed',
-    
-    // Media Links
-    'Completion Photo URL',
-    'Damaged Part Image URL',
+    'Free Service',
 ];
 
 /**
@@ -91,14 +83,8 @@ export const SAMPLE_UPDATE_DATA = [
     'Cleaned the filter and reset the main circuit board.',
     '500',
     'Cash',
+    '250', // Sample points
     'Filter Cap | 250 | 6 Months',
-    'TRUE',
-    'TRUE',
-    'TRUE',
-    'TRUE',
-    'FALSE',
-    'TRUE',
-    'TRUE',
-    'https://example.com/photo.jpg',
-    'https://example.com/damaged_part.jpg',
+    'TRUE', // AMC Discussion
+    'FALSE', // Free Service
 ];

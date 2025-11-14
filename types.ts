@@ -30,13 +30,7 @@ export enum PaymentStatus {
 }
 
 export interface ServiceChecklist {
-    concernInformed: boolean;
-    replacedPartsShown: boolean;
-    taggingDone: boolean;
-    siteCleaned: boolean;
     amcDiscussion: boolean;
-    partsGivenToCustomer: boolean;
-    cashReceiptHanded: boolean;
 }
 
 export enum PartType {
@@ -95,6 +89,7 @@ export interface Ticket {
   amountCollected?: number;
   partsReplaced?: ReplacedPart[];
   pointsAwarded?: boolean; // Flag to check if points have been given for this ticket
+  freeService?: boolean; // New field for free service tracking
 }
 
 export interface Feedback {
