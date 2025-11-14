@@ -24,7 +24,7 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
             <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-full overflow-y-auto">
                 <div className="p-6">
                     <div className="text-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-900">XYZ Glen Service Partner</h2>
+                        <h2 className="text-2xl font-bold text-gray-900">Pandit Glen Service</h2>
                         <p className="text-sm text-gray-500">Your Trusted Appliance Experts</p>
                     </div>
                     <div className="text-center border-b border-t py-2 mb-6">
@@ -86,7 +86,7 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
                         </div>
                          <div className="text-center text-xs text-gray-500 pt-4">
                             <p>Serviced by: {technician?.name || user?.name}</p>
-                            <p>Thank you for choosing XYZ Glen Service Partner!</p>
+                            <p>Thank you for choosing Pandit Glen Service!</p>
                         </div>
                     </div>
                      <div className="flex justify-end space-x-3 pt-6">

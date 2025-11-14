@@ -15,7 +15,7 @@ const Logo: React.FC = () => (
       <path d="M12 5V2M12 22V19M19 12H22M2 12H5M17.6569 6.34315L19.7782 4.22183M4.22183 19.7782L6.34315 17.6569M17.6569 17.6569L19.7782 19.7782M4.22183 4.22183L6.34315 6.34315" stroke="#007aff" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
     <h1 className="text-xl font-bold text-glen-blue">
-      Glen <span className="font-light text-gray-700">Service Manager</span>
+      Pandit <span className="font-light text-gray-700">Glen Service</span>
     </h1>
   </div>
 );

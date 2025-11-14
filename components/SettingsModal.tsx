@@ -41,8 +41,7 @@ const AutomationSettings: React.FC = () => {
   const { addToast } = useToast();
 
   useEffect(() => {
-    const defaultWebhookUrl = 'https://hook.eu2.make.com/ohvxcesvh1dwr7ejl1f2c7v4ed5sxovn';
-    setMasterWebhookUrl(localStorage.getItem('masterWebhookUrl') || defaultWebhookUrl);
+    setMasterWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
     setComplaintSheetUrl(localStorage.getItem('complaintSheetUrl') || '');
     setUpdateSheetUrl(localStorage.getItem('updateSheetUrl') || '');
   }, []);
@@ -67,9 +66,14 @@ const AutomationSettings: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h4 className="text-lg font-semibold text-gray-800 mb-2">Webhook Configuration</h4>
-        <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border">
+        <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border space-y-2">
+           <p>
             Enter your single, master webhook URL from your automation service (e.g., Make.com). All app events will be sent to this one URL.
-        </p>
+           </p>
+           <p className="font-semibold text-glen-blue">
+            <span className="font-bold">IMPORTANT:</span> To enable syncing, your Make.com scenario must handle a new action: `GET_TICKETS`. When it receives this action, it should search your Google Sheet and use a "Webhook Response" module to send the data back.
+           </p>
+        </div>
         <div className="space-y-4">
             <div>
             <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
@@ -86,9 +90,15 @@ const AutomationSettings: React.FC = () => {
 
       <div className="border-t pt-6">
         <h4 className="text-lg font-semibold text-gray-800 mb-2">Google Sheets Setup</h4>
-        <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border">
-            Create two blank Google Sheets. Paste their URLs below and click "Initialize". This will automatically add all the necessary columns to your sheets.
-        </p>
+        <div className="text-sm text-gray-600 mb-4 bg-yellow-50 p-3 rounded-lg border border-yellow-300">
+            <p className="font-bold text-yellow-800">How to Initialize:</p>
+            <ol className="list-decimal list-inside mt-1 space-y-1">
+                <li>Create two blank Google Sheets.</li>
+                <li>Paste their URLs below.</li>
+                <li>Click "Initialize Sheets". This adds headers and a <span className="font-semibold">sample data row</span> to each sheet.</li>
+                <li>This sample data teaches your automation tool (like Make.com) the sheet's structure so you can map variables correctly. You can delete the sample row after setup.</li>
+            </ol>
+        </div>
          <div>
             <label className="block text-sm font-medium text-gray-700">Sheet 1: Complaint Sheet URL</label>
             <input

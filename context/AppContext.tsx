@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 // Fix: Import PartType and PartWarrantyStatus to correctly type the mock data.
-import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus } from '../types';
+import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
-import { COMPLAINT_SHEET_HEADERS, UPDATE_SHEET_HEADERS } from '../data/sheetHeaders';
+import { COMPLAINT_SHEET_HEADERS, UPDATE_SHEET_HEADERS, SAMPLE_COMPLAINT_DATA, SAMPLE_UPDATE_DATA } from '../data/sheetHeaders';
 
 interface AppContextType {
   user: User | null;
   tickets: Ticket[];
   technicians: Technician[];
   feedback: Feedback[];
+  isSyncing: boolean;
   login: (user: User) => void;
   logout: () => void;
   addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
@@ -22,95 +23,23 @@ interface AppContextType {
   sendReceipt: (ticketId: string) => void;
   initializeSheets: () => void;
   resetAllTechnicianPoints: () => void;
+  syncTickets: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Pre-populated ticket for testing purposes as per user request
-const initialTickets: Ticket[] = [
-  {
-    id: `SB/2025/11/DL/1291020`,
-    customerName: 'Dr. Vargis',
-    phone: '9876543210',
-    address: 'Flat no 234, Shardha apartment, Green park',
-    complaint: 'Chimney repair. To be attended tomorrow at 11 am.',
-    technicianId: 'tech1', // Anil Kumar's ID
-    status: TicketStatus.New,
-    createdAt: new Date('2025-11-01T09:00:00Z'),
-    serviceBookingDate: new Date('2025-11-02'),
-    preferredTime: '10AM-12PM',
-    serviceCategory: 'Chimney',
-    productDetails: { make: 'Glen', segment: 'Kitchen Appliances', category: 'Chimney', subCategory: 'Wall Mounted', product: 'CH6050SXTS' },
-    symptoms: ['not starting', 'making noise'],
-  },
-  {
-    id: `SB/2025/11/DL/1291021`,
-    customerName: 'Meera Singh',
-    phone: '9821123456',
-    address: '12B, Karol Bagh, New Delhi',
-    complaint: 'Cooktop burner not working',
-    technicianId: 'tech2', // Sunil Sharma's ID
-    status: TicketStatus.InProgress,
-    createdAt: new Date('2025-11-01T11:30:00Z'),
-    serviceBookingDate: new Date('2025-11-01'),
-    preferredTime: '02PM-04PM',
-    serviceCategory: 'Cook top',
-    productDetails: { make: 'Glen', segment: 'Large appliances', category: 'Cook top', subCategory: 'Cooktop Glass', product: 'GI 1038 gt fb dd black' },
-    symptoms: ['burner-problem'],
-  },
-   {
-    id: `SB/2025/11/DL/1291022`,
-    customerName: 'Amit Patel',
-    phone: '8876543210',
-    address: 'C-45, Lajpat Nagar, New Delhi',
-    complaint: 'Electric kettle not heating',
-    technicianId: 'tech3', // Rajesh Verma's ID
-    status: TicketStatus.Completed,
-    createdAt: new Date('2025-10-30T14:00:00Z'),
-    completedAt: new Date('2025-10-31T12:00:00Z'),
-    serviceBookingDate: new Date('2025-10-31'),
-    preferredTime: '10AM-12PM',
-    serviceCategory: 'Electric kettle',
-    productDetails: { make: 'Glen', segment: 'Small Appliances', category: 'Kettle', subCategory: 'Electric', product: 'SA-5010' },
-    symptoms: ['no heating'],
-    workDone: 'Replaced heating element and tested.',
-    paymentStatus: PaymentStatus.UPI,
-    cause: 'Faulty heating element due to scaling.',
-    reason: 'Element was beyond repair and required replacement.',
-    warrantyApplicable: false,
-    amountCollected: 1200,
-    pointsAwarded: true, // Assuming points were already given for this old completed job
-    // Fix: Corrected the ReplacedPart object to match the interface definition.
-    // Renamed 'warranty' to 'warrantyDuration' and added missing properties.
-    partsReplaced: [{
-        name: 'Heating Coil',
-        price: 800,
-        type: PartType.Replacement,
-        warrantyStatus: PartWarrantyStatus.OutOfWarranty,
-        category: 'Small Appliances',
-        warrantyDuration: '6 Months'
-    }]
-  }
-];
-
-const initialFeedback: Feedback[] = [
-    {
-        id: 'FB-1',
-        ticketId: 'SB/2025/11/DL/1291022', // Rajesh's completed job
-        rating: 4,
-        comment: 'Rajesh has done excellent work he was clean shaved and humble in answering all questions etc.',
-        createdAt: new Date('2025-10-31T18:00:00Z'),
-    }
-]
-
+// Fix: Export AppProvider to make it available for import.
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [feedback, setFeedback] = useState<Feedback[]>(initialFeedback);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { addToast } = useToast();
 
+  // Load initial data from localStorage for offline-first experience
   useEffect(() => {
+    // Technicians
     const savedTechs = localStorage.getItem('technicians');
     if (savedTechs) {
       setTechnicians(JSON.parse(savedTechs));
@@ -118,7 +47,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setTechnicians(TECHNICIANS);
       localStorage.setItem('technicians', JSON.stringify(TECHNICIANS));
     }
+    // Tickets
+    const savedTickets = localStorage.getItem('tickets');
+    if (savedTickets) {
+        const parsedTickets = JSON.parse(savedTickets, (key, value) => {
+             if (key === 'createdAt' || key === 'serviceBookingDate' || key === 'completedAt' || key === 'purchaseDate') {
+                return value ? new Date(value) : undefined;
+            }
+            return value;
+        });
+      setTickets(parsedTickets);
+    }
   }, []);
+
+  // Persist tickets to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('tickets', JSON.stringify(tickets));
+  }, [tickets]);
+
 
   // Helper function to send data to a single master webhook
   const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
@@ -137,8 +83,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
                   addToast(`Automation for "${actionName}" triggered!`, 'success');
               } else {
-                  console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
-                  addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
+                  if (response.status === 410) {
+                      console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
+                      localStorage.removeItem('masterWebhookUrl');
+                      addToast('Webhook URL is invalid (Error 410). It has been cleared. Please paste a new URL from Make.com and save it in Settings.', 'error');
+                  } else {
+                      console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+                      addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
+                  }
               }
           } catch (error) {
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
@@ -151,7 +103,72 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const login = (loggedInUser: User) => setUser(loggedInUser);
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    // Optional: Clear tickets on logout to ensure fresh data for next user
+    // setTickets([]); 
+  };
+
+
+  const syncTickets = async () => {
+    if (!user) return;
+    const webhookUrl = localStorage.getItem('masterWebhookUrl');
+    if (!webhookUrl) {
+      addToast('Webhook URL not configured in settings.', 'error');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const payload = {
+        action: 'GET_TICKETS',
+        role: user.role,
+        technicianId: user.role === UserRole.Technician ? user.id : undefined,
+      };
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        if (response.status === 410) {
+            console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
+            localStorage.removeItem('masterWebhookUrl');
+            addToast('Webhook URL is invalid (Error 410). It has been cleared. Please get a new URL from Make.com and save it in Settings.', 'error');
+        } else {
+            throw new Error(`Sync failed with status: ${response.status}`);
+        }
+        return; // Stop execution if sync fails
+      }
+
+      const data = await response.json();
+      
+      if (data.tickets && Array.isArray(data.tickets)) {
+          const syncedTickets = data.tickets.map((ticket: any) => ({
+              ...ticket,
+              createdAt: ticket.createdAt ? new Date(ticket.createdAt) : new Date(),
+              serviceBookingDate: ticket.serviceBookingDate ? new Date(ticket.serviceBookingDate) : new Date(),
+              completedAt: ticket.completedAt ? new Date(ticket.completedAt) : undefined,
+              purchaseDate: ticket.purchaseDate ? new Date(ticket.purchaseDate) : undefined,
+              // Ensure partsReplaced is an array
+              partsReplaced: ticket.partsReplaced || [],
+          }));
+
+          setTickets(syncedTickets);
+          addToast('Jobs synced successfully!', 'success');
+      } else {
+           throw new Error('Invalid data format received from webhook.');
+      }
+
+    } catch (error) {
+      console.error('[SYNC] Error syncing tickets:', error);
+      addToast('Failed to sync jobs from Google Sheets.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const addTicket = (ticketData: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => {
     const newTicket: Ticket = {
@@ -161,10 +178,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         createdAt: new Date(),
         serviceBookingDate: new Date(), // Default to today, can be changed
     }
+    // Optimistic UI update
     setTickets(prev => [newTicket, ...prev]);
     const technician = technicians.find(t => t.id === newTicket.technicianId);
     
-    // Payload for the COMPLAINT_SHEET
     const payload = { 
         ticket: newTicket,
         technicianName: technician?.name || 'Unassigned'
@@ -179,6 +196,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateTicket = (updatedTicket: Ticket) => {
     const originalTicket = tickets.find(t => t.id === updatedTicket.id);
+    // Optimistic UI update
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
     const technician = technicians.find(t => t.id === updatedTicket.technicianId);
@@ -193,7 +211,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
     );
 
-    // If the job is completed, award points and send a payload for the UPDATE_SHEET
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
         if (!updatedTicket.pointsAwarded) {
             const updatedTechs = technicians.map(t => {
@@ -205,8 +222,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
             setTechnicians(updatedTechs);
             localStorage.setItem('technicians', JSON.stringify(updatedTechs));
-            updatedTicket.pointsAwarded = true; // Mark points as awarded
-            setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t)); // Save the flag change
+            updatedTicket.pointsAwarded = true; 
+            setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
         }
 
         sendWebhook(
@@ -296,6 +313,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const payload = {
       complaintSheetHeaders: COMPLAINT_SHEET_HEADERS,
       updateSheetHeaders: UPDATE_SHEET_HEADERS,
+      sampleComplaintData: SAMPLE_COMPLAINT_DATA,
+      sampleUpdateData: SAMPLE_UPDATE_DATA,
     };
     sendWebhook(
       'INITIALIZE_SHEETS',
@@ -314,7 +333,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets, resetAllTechnicianPoints };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets, resetAllTechnicianPoints, isSyncing, syncTickets };
 
   return (
     <AppContext.Provider value={contextValue}>
