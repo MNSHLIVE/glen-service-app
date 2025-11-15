@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-// Fix: Import PartType and PartWarrantyStatus to correctly type the mock data.
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
@@ -23,11 +22,36 @@ interface AppContextType {
   sendReceipt: (ticketId: string) => void;
   resetAllTechnicianPoints: () => void;
   syncTickets: () => Promise<void>;
+  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Fix: Export AppProvider to make it available for import.
+const createDummyTicket = (): Ticket => ({
+    id: `SB/${new Date().getFullYear()}/TEST/DUMMY01`,
+    customerName: 'Dummy Customer',
+    phone: '9988776655',
+    address: '123, Test Lane, Automation City',
+    complaint: 'This is a test ticket for setting up automation.',
+    technicianId: 'tech-test',
+    status: TicketStatus.Completed,
+    createdAt: new Date(),
+    serviceBookingDate: new Date(),
+    preferredTime: '10AM-12PM',
+    serviceCategory: 'Chimney',
+    productDetails: { make: 'Glen', segment: '', category: 'Chimney', subCategory: '', product: '' },
+    symptoms: [],
+    completedAt: new Date(),
+    workDone: 'Test work completed successfully.',
+    paymentStatus: PaymentStatus.UPI,
+    amountCollected: 500,
+    partsReplaced: [{ name: 'Test Filter', price: 250, type: PartType.Replacement, warrantyStatus: PartWarrantyStatus.OutOfWarranty, category: 'Consumable', warrantyDuration: 'N/A' }],
+    serviceChecklist: { amcDiscussion: true },
+    freeService: false,
+    pointsAwarded: true,
+});
+
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -36,19 +60,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSyncing, setIsSyncing] = useState(false);
   const { addToast } = useToast();
 
-  // Load initial data from localStorage for offline-first experience
   useEffect(() => {
-    // Technicians
     const savedTechs = localStorage.getItem('technicians');
     if (savedTechs) {
-      setTechnicians(JSON.parse(savedTechs));
+      const parsed = JSON.parse(savedTechs);
+      // Ensure test tech exists
+      if (!parsed.find((t: Technician) => t.id === 'tech-test')) {
+        const updatedTechs = [...parsed, TECHNICIANS.find(t => t.id === 'tech-test')];
+        setTechnicians(updatedTechs);
+        localStorage.setItem('technicians', JSON.stringify(updatedTechs));
+      } else {
+        setTechnicians(parsed);
+      }
     } else {
       setTechnicians(TECHNICIANS);
       localStorage.setItem('technicians', JSON.stringify(TECHNICIANS));
     }
-    // Tickets
+
     const savedTickets = localStorage.getItem('tickets');
-    if (savedTickets) {
+    if (savedTickets && JSON.parse(savedTickets).length > 0) {
         const parsedTickets = JSON.parse(savedTickets, (key, value) => {
              if (key === 'createdAt' || key === 'serviceBookingDate' || key === 'completedAt' || key === 'purchaseDate') {
                 return value ? new Date(value) : undefined;
@@ -56,16 +86,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return value;
         });
       setTickets(parsedTickets);
+    } else {
+        // SEED with dummy ticket if it's the first run
+        const dummy = createDummyTicket();
+        setTickets([dummy]);
     }
   }, []);
 
-  // Persist tickets to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('tickets', JSON.stringify(tickets));
   }, [tickets]);
 
 
-  // Helper function to send data to a single master webhook
   const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
       const webhookUrl = localStorage.getItem('masterWebhookUrl');
       const actionName = action.replace(/_/g, ' ').toLowerCase();
@@ -101,11 +133,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => {
+     sendWebhook(
+        action,
+        { data: payload },
+        `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
+    );
+  };
+
   const login = (loggedInUser: User) => setUser(loggedInUser);
   const logout = () => {
     setUser(null);
-    // Optional: Clear tickets on logout to ensure fresh data for next user
-    // setTickets([]); 
   };
 
 
@@ -139,13 +177,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } else {
             throw new Error(`Sync failed with status: ${response.status}`);
         }
-        return; // Stop execution if sync fails
+        return;
       }
 
       const data = await response.json();
       
       if (data.tickets && Array.isArray(data.tickets)) {
-          // Map the flat data from Google Sheets back to the Ticket object structure using header names for robustness
           const syncedTickets: Ticket[] = data.tickets.map((row: any) => {
             const partsReplacedString = row['Parts Replaced (Name | Price | Warranty)'] || '';
             const parts: ReplacedPart[] = partsReplacedString.split(', ').filter(Boolean).map((partStr: string) => {
@@ -154,9 +191,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 name: name || 'N/A',
                 price: parseFloat(price) || 0,
                 warrantyDuration: warrantyDuration || 'N/A',
-                type: PartType.Replacement, // Defaulting, as this info is not in the string
-                warrantyStatus: PartWarrantyStatus.OutOfWarranty, // Defaulting
-                category: 'N/A', // Defaulting
+                type: PartType.Replacement,
+                warrantyStatus: PartWarrantyStatus.OutOfWarranty,
+                category: 'N/A',
               };
             });
             
@@ -185,7 +222,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 freeService: row['Free Service'] === 'true' || row['Free Service'] === true,
                 partsReplaced: parts,
             };
-            // Add default values for fields not in sheets to satisfy the Ticket type
             return {
                 ...ticket,
                 productDetails: { make: 'Glen', segment: '', category: ticket.serviceCategory || '', subCategory: '', product: '' },
@@ -213,13 +249,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: `SB/${new Date().getFullYear()}/${new Date().getMonth()+1}/DL/${Math.floor(Math.random() * 900000) + 100000}`,
         status: TicketStatus.New,
         createdAt: new Date(),
-        serviceBookingDate: new Date(), // Default to today, can be changed
+        serviceBookingDate: new Date(),
     }
-    // Optimistic UI update
     setTickets(prev => [newTicket, ...prev]);
     const technician = technicians.find(t => t.id === newTicket.technicianId);
     
-    // Create a simple, flat payload with keys matching Google Sheet headers
     const flatPayload = {
       [COMPLAINT_SHEET_HEADERS[0]]: newTicket.id,
       [COMPLAINT_SHEET_HEADERS[1]]: newTicket.createdAt.toISOString(),
@@ -237,19 +271,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sendWebhook(
         'NEW_TICKET', 
         { data: flatPayload },
-        `[AUTOMATION] Trigger: New Ticket Created. Sending data to Make.com... (Master Webhook not configured)`
+        `[AUTOMATION] Trigger: New Ticket Created. (Master Webhook not configured)`
     );
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
     const originalTicket = tickets.find(t => t.id === updatedTicket.id);
-    // Optimistic UI update
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
     const technician = technicians.find(t => t.id === updatedTicket.technicianId);
     const partsReplacedString = (updatedTicket.partsReplaced || []).map(p => `${p.name} | ${p.price} | ${p.warrantyDuration}`).join(', ');
 
-    // General update payload (can be enhanced if needed)
     const updatePayload = { 
         ticketId: updatedTicket.id,
         newStatus: updatedTicket.status,
@@ -259,7 +291,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sendWebhook(
         'TICKET_UPDATED',
         updatePayload,
-        `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
+        `[AUTOMATION] Trigger: Ticket Updated. (Master Webhook not configured)`
     );
 
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
@@ -279,7 +311,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
         }
         
-        // Create a simple, flat payload with keys matching Google Sheet headers for JOB_COMPLETED
         const flatJobCompletedPayload = {
             [TECHNICIAN_UPDATE_HEADERS[0]]: updatedTicket.id,
             [TECHNICIAN_UPDATE_HEADERS[1]]: updatedTicket.createdAt.toISOString(),
@@ -302,7 +333,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendWebhook(
             'JOB_COMPLETED',
             { data: flatJobCompletedPayload },
-            `[AUTOMATION] Trigger: Job Completed. Sending data to Make.com... (Master Webhook not configured)`
+            `[AUTOMATION] Trigger: Job Completed. (Master Webhook not configured)`
         );
     }
   };
@@ -340,7 +371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sendWebhook(
         'NEW_FEEDBACK',
         payload,
-        `[AUTOMATION] Trigger: New Feedback Received. Sending data to Make.com... (Master Webhook not configured)`
+        `[AUTOMATION] Trigger: New Feedback Received. (Master Webhook not configured)`
     );
   };
 
@@ -392,7 +423,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, sendCustomWebhookPayload };
 
   return (
     <AppContext.Provider value={contextValue}>

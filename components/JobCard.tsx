@@ -8,6 +8,16 @@ interface JobCardProps {
   onViewDetails: (ticketId: string) => void;
 }
 
+// Helper function to determine the color of the status chip
+const getStatusChip = (status: TicketStatus) => {
+    switch (status) {
+      case TicketStatus.New: return 'bg-blue-100 text-blue-800';
+      case TicketStatus.InProgress: return 'bg-yellow-100 text-yellow-800';
+      case TicketStatus.Completed: return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+};
+
 // Update Status Modal for Admin, defined within JobCard component file
 const UpdateStatusModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticket, onClose }) => {
     const { updateTicket } = useAppContext();
@@ -55,7 +65,7 @@ const UpdateStatusModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ 
 const JobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
   const { user } = useAppContext();
   
-  if (user?.role === UserRole.Admin) {
+  if (user?.role === UserRole.Admin || user?.role === UserRole.Controller) {
     return <AdminJobCard ticket={ticket} onViewDetails={onViewDetails} />;
   }
   
@@ -87,7 +97,12 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
                              <p className="text-sm font-bold text-gray-800">No: {ticket.id}</p>
                              <p className="text-xs text-gray-500">Assigned to: {technician?.name}</p>
                         </div>
-                        <button onClick={() => onViewDetails(ticket.id)} className="text-sm font-bold text-glen-blue">View &gt;</button>
+                        <div className="text-right">
+                             <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusChip(ticket.status)}`}>
+                                {ticket.status}
+                            </span>
+                            <button onClick={() => onViewDetails(ticket.id)} className="text-sm font-bold text-glen-blue mt-1 block">View &gt;</button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
@@ -130,14 +145,6 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
 
 // Technician-specific card design
 const TechnicianJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
-  const getStatusChip = (status: TicketStatus) => {
-    switch (status) {
-      case TicketStatus.New: return 'bg-blue-100 text-blue-800';
-      case TicketStatus.InProgress: return 'bg-yellow-100 text-yellow-800';
-      case TicketStatus.Completed: return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
