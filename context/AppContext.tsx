@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
-import { COMPLAINT_SHEET_HEADERS, UPDATE_SHEET_HEADERS, SAMPLE_COMPLAINT_DATA, SAMPLE_UPDATE_DATA } from '../data/sheetHeaders';
+import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
 
 interface AppContextType {
   user: User | null;
@@ -21,7 +21,6 @@ interface AppContextType {
   updateTechnician: (updatedTech: Technician) => void;
   deleteTechnician: (techId: string) => void;
   sendReceipt: (ticketId: string) => void;
-  initializeSheets: () => void;
   resetAllTechnicianPoints: () => void;
   syncTickets: () => Promise<void>;
 }
@@ -146,15 +145,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const data = await response.json();
       
       if (data.tickets && Array.isArray(data.tickets)) {
-          const syncedTickets = data.tickets.map((ticket: any) => ({
-              ...ticket,
-              createdAt: ticket.createdAt ? new Date(ticket.createdAt) : new Date(),
-              serviceBookingDate: ticket.serviceBookingDate ? new Date(ticket.serviceBookingDate) : new Date(),
-              completedAt: ticket.completedAt ? new Date(ticket.completedAt) : undefined,
-              purchaseDate: ticket.purchaseDate ? new Date(ticket.purchaseDate) : undefined,
-              // Ensure partsReplaced is an array
-              partsReplaced: ticket.partsReplaced || [],
-          }));
+          // Map the flat data from Google Sheets back to the Ticket object structure using header names for robustness
+          const syncedTickets: Ticket[] = data.tickets.map((row: any) => {
+            const partsReplacedString = row['Parts Replaced (Name | Price | Warranty)'] || '';
+            const parts: ReplacedPart[] = partsReplacedString.split(', ').filter(Boolean).map((partStr: string) => {
+              const [name, price, warrantyDuration] = partStr.split(' | ');
+              return {
+                name: name || 'N/A',
+                price: parseFloat(price) || 0,
+                warrantyDuration: warrantyDuration || 'N/A',
+                type: PartType.Replacement, // Defaulting, as this info is not in the string
+                warrantyStatus: PartWarrantyStatus.OutOfWarranty, // Defaulting
+                category: 'N/A', // Defaulting
+              };
+            });
+            
+            const findTechId = (name: string) => technicians.find(t => t.name === name)?.id || '';
+
+            const ticket: Partial<Ticket> = {
+                id: row['Ticket ID'],
+                createdAt: row['Created At'] ? new Date(row['Created At']) : new Date(),
+                serviceBookingDate: row['Service Booking Date'] ? new Date(row['Service Booking Date']) : new Date(),
+                preferredTime: row['Preferred Time'],
+                customerName: row['Customer Name'],
+                phone: row['Phone'],
+                address: row['Address'],
+                serviceCategory: row['Service Category'],
+                complaint: row['Complaint'],
+                technicianId: findTechId(row['Assigned Technician'] || row['Technician Name']),
+                status: (row['Status'] as TicketStatus) || TicketStatus.New,
+                completedAt: row['Completed At'] ? new Date(row['Completed At']) : undefined,
+                workDone: row['Work Done Summary'],
+                amountCollected: parseFloat(row['Amount Collected']) || undefined,
+                paymentStatus: (row['Payment Status'] as PaymentStatus) || undefined,
+                pointsAwarded: !!row['Points Awarded'],
+                serviceChecklist: {
+                    amcDiscussion: row['AMC Discussion'] === 'true' || row['AMC Discussion'] === true,
+                },
+                freeService: row['Free Service'] === 'true' || row['Free Service'] === true,
+                partsReplaced: parts,
+            };
+            // Add default values for fields not in sheets to satisfy the Ticket type
+            return {
+                ...ticket,
+                productDetails: { make: 'Glen', segment: '', category: ticket.serviceCategory || '', subCategory: '', product: '' },
+                symptoms: [],
+            } as Ticket;
+          });
 
           setTickets(syncedTickets);
           addToast('Jobs synced successfully!', 'success');
@@ -182,14 +219,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTickets(prev => [newTicket, ...prev]);
     const technician = technicians.find(t => t.id === newTicket.technicianId);
     
-    const payload = { 
-        ticket: newTicket,
-        technicianName: technician?.name || 'Unassigned'
+    // Create a simple, flat payload with keys matching Google Sheet headers
+    const flatPayload = {
+      [COMPLAINT_SHEET_HEADERS[0]]: newTicket.id,
+      [COMPLAINT_SHEET_HEADERS[1]]: newTicket.createdAt.toISOString(),
+      [COMPLAINT_SHEET_HEADERS[2]]: newTicket.serviceBookingDate.toISOString(),
+      [COMPLAINT_SHEET_HEADERS[3]]: newTicket.preferredTime,
+      [COMPLAINT_SHEET_HEADERS[4]]: newTicket.customerName,
+      [COMPLAINT_SHEET_HEADERS[5]]: newTicket.phone,
+      [COMPLAINT_SHEET_HEADERS[6]]: newTicket.address,
+      [COMPLAINT_SHEET_HEADERS[7]]: newTicket.serviceCategory,
+      [COMPLAINT_SHEET_HEADERS[8]]: newTicket.complaint,
+      [COMPLAINT_SHEET_HEADERS[9]]: technician?.name || 'Unassigned',
+      [COMPLAINT_SHEET_HEADERS[10]]: newTicket.status,
     };
 
     sendWebhook(
         'NEW_TICKET', 
-        payload,
+        { data: flatPayload },
         `[AUTOMATION] Trigger: New Ticket Created. Sending data to Make.com... (Master Webhook not configured)`
     );
   };
@@ -200,23 +247,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
     
     const technician = technicians.find(t => t.id === updatedTicket.technicianId);
-    const payload = { 
-        ticket: updatedTicket, 
-        technicianName: technician?.name || 'Unassigned'
+    const partsReplacedString = (updatedTicket.partsReplaced || []).map(p => `${p.name} | ${p.price} | ${p.warrantyDuration}`).join(', ');
+
+    // General update payload (can be enhanced if needed)
+    const updatePayload = { 
+        ticketId: updatedTicket.id,
+        newStatus: updatedTicket.status,
+        comments: updatedTicket.comments,
     };
     
     sendWebhook(
         'TICKET_UPDATED',
-        payload,
+        updatePayload,
         `[AUTOMATION] Trigger: Ticket Updated. Sending data to Make.com... (Master Webhook not configured)`
     );
 
     if (originalTicket?.status !== TicketStatus.Completed && updatedTicket.status === TicketStatus.Completed) {
+        let pointsEarned = 0;
         if (!updatedTicket.pointsAwarded) {
+            pointsEarned = 250;
             const updatedTechs = technicians.map(t => {
                 if (t.id === updatedTicket.technicianId) {
-                    addToast(`${t.name} earned 250 points!`, 'success');
-                    return { ...t, points: t.points + 250 };
+                    addToast(`${t.name} earned ${pointsEarned} points!`, 'success');
+                    return { ...t, points: t.points + pointsEarned };
                 }
                 return t;
             });
@@ -225,10 +278,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             updatedTicket.pointsAwarded = true; 
             setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
         }
+        
+        // Create a simple, flat payload with keys matching Google Sheet headers for JOB_COMPLETED
+        const flatJobCompletedPayload = {
+            [TECHNICIAN_UPDATE_HEADERS[0]]: updatedTicket.id,
+            [TECHNICIAN_UPDATE_HEADERS[1]]: updatedTicket.createdAt.toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[2]]: updatedTicket.customerName,
+            [TECHNICIAN_UPDATE_HEADERS[3]]: updatedTicket.phone,
+            [TECHNICIAN_UPDATE_HEADERS[4]]: updatedTicket.address,
+            [TECHNICIAN_UPDATE_HEADERS[5]]: updatedTicket.serviceCategory,
+            [TECHNICIAN_UPDATE_HEADERS[6]]: updatedTicket.complaint,
+            [TECHNICIAN_UPDATE_HEADERS[7]]: (updatedTicket.completedAt || new Date()).toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[8]]: technician?.name || 'Unassigned',
+            [TECHNICIAN_UPDATE_HEADERS[9]]: updatedTicket.workDone || '',
+            [TECHNICIAN_UPDATE_HEADERS[10]]: updatedTicket.amountCollected || 0,
+            [TECHNICIAN_UPDATE_HEADERS[11]]: updatedTicket.paymentStatus || PaymentStatus.Pending,
+            [TECHNICIAN_UPDATE_HEADERS[12]]: pointsEarned,
+            [TECHNICIAN_UPDATE_HEADERS[13]]: partsReplacedString,
+            [TECHNICIAN_UPDATE_HEADERS[14]]: updatedTicket.serviceChecklist?.amcDiscussion || false,
+            [TECHNICIAN_UPDATE_HEADERS[15]]: updatedTicket.freeService || false,
+        };
 
         sendWebhook(
             'JOB_COMPLETED',
-            payload,
+            { data: flatJobCompletedPayload },
             `[AUTOMATION] Trigger: Job Completed. Sending data to Make.com... (Master Webhook not configured)`
         );
     }
@@ -308,20 +381,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `[AUTOMATION] Trigger: Receipt Generated for Ticket ${ticketId}. (Master Webhook not configured)`
     );
   };
-  
-  const initializeSheets = () => {
-    const payload = {
-      complaintSheetHeaders: COMPLAINT_SHEET_HEADERS,
-      updateSheetHeaders: UPDATE_SHEET_HEADERS,
-      sampleComplaintData: SAMPLE_COMPLAINT_DATA,
-      sampleUpdateData: SAMPLE_UPDATE_DATA,
-    };
-    sendWebhook(
-      'INITIALIZE_SHEETS',
-      payload,
-      `[AUTOMATION] Trigger: Initialize Google Sheets. (Master Webhook not configured)`
-    );
-  };
 
   const resetAllTechnicianPoints = () => {
     if (window.confirm('Are you sure you want to reset all technician points to zero? This action cannot be undone.')) {
@@ -333,7 +392,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, initializeSheets, resetAllTechnicianPoints, isSyncing, syncTickets };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets };
 
   return (
     <AppContext.Provider value={contextValue}>

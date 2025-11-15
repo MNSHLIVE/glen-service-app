@@ -42,7 +42,7 @@ const App: React.FC = () => {
       return <TicketDetails ticketId={viewingTicketId} onBack={handleBackToList} />;
     }
     
-    if (user.role === UserRole.Admin) {
+    if (user.role === UserRole.Admin || user.role === UserRole.Controller) {
       return <AdminDashboard onViewTicket={handleViewTicket} />;
     }
     

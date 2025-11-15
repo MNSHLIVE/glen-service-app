@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { UserRole } from '../types';
 
 const ADMIN_PINS = ['999', '222'];
+const CONTROLLER_PIN = '555';
 
 const LoginScreen: React.FC = () => {
   const [pin, setPin] = useState('');
@@ -17,6 +19,11 @@ const LoginScreen: React.FC = () => {
       login({ id: 'admin01', name: 'Admin User', role: UserRole.Admin });
       return;
     }
+    
+    if (pin === CONTROLLER_PIN) {
+        login({ id: 'controller01', name: 'Controller User', role: UserRole.Controller });
+        return;
+    }
 
     const foundTechnician = technicians.find(t => t.password === pin);
     if (foundTechnician) {
@@ -26,7 +33,7 @@ const LoginScreen: React.FC = () => {
     
     // Check for potential partial matches to avoid premature error messages
     const isPartialMatch = technicians.some(t => t.password?.startsWith(pin));
-    if (!isPartialMatch && pin.length >= 3 && !ADMIN_PINS.some(p => p.startsWith(pin))) {
+    if (!isPartialMatch && pin.length >= 3 && !ADMIN_PINS.some(p => p.startsWith(pin)) && !CONTROLLER_PIN.startsWith(pin)) {
         setError('Invalid PIN');
         const timer = setTimeout(() => setError(''), 1000);
         return () => clearTimeout(timer);

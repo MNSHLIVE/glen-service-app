@@ -34,7 +34,6 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 
 const AutomationSettings: React.FC = () => {
-  const { initializeSheets } = useAppContext();
   const [masterWebhookUrl, setMasterWebhookUrl] = useState('');
   const [complaintSheetUrl, setComplaintSheetUrl] = useState('');
   const [updateSheetUrl, setUpdateSheetUrl] = useState('');
@@ -52,15 +51,6 @@ const AutomationSettings: React.FC = () => {
     localStorage.setItem('updateSheetUrl', updateSheetUrl);
     addToast('Settings saved!', 'success');
   };
-  
-  const handleInitialize = () => {
-    if (!complaintSheetUrl || !updateSheetUrl) {
-        addToast('Please provide URLs for both sheets before initializing.', 'error');
-        return;
-    }
-    handleSave(); // Save URLs before initializing
-    initializeSheets();
-  }
 
    return (
     <div className="space-y-6">
@@ -90,13 +80,12 @@ const AutomationSettings: React.FC = () => {
 
       <div className="border-t pt-6">
         <h4 className="text-lg font-semibold text-gray-800 mb-2">Google Sheets Setup</h4>
-        <div className="text-sm text-gray-600 mb-4 bg-yellow-50 p-3 rounded-lg border border-yellow-300">
-            <p className="font-bold text-yellow-800">How to Initialize:</p>
+        <div className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
+            <p className="font-bold text-blue-800">Instructions:</p>
             <ol className="list-decimal list-inside mt-1 space-y-1">
-                <li>Create two blank Google Sheets.</li>
-                <li>Paste their URLs below.</li>
-                <li>Click "Initialize Sheets". This adds headers and a <span className="font-semibold">sample data row</span> to each sheet.</li>
-                <li>This sample data teaches your automation tool (like Make.com) the sheet's structure so you can map variables correctly. You can delete the sample row after setup.</li>
+                <li>Manually create the column headers in your two Google Sheets as per the documentation.</li>
+                <li>Paste the URLs for your two sheets below.</li>
+                <li>Click "Save Settings". The app will now send data to these sheets.</li>
             </ol>
         </div>
          <div>
@@ -119,8 +108,7 @@ const AutomationSettings: React.FC = () => {
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
             />
         </div>
-        <div className="flex justify-end pt-6 items-center space-x-4">
-            <button type="button" onClick={handleInitialize} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors">Initialize Sheets</button>
+        <div className="flex justify-end pt-6">
             <button type="button" onClick={handleSave} className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors">Save Settings</button>
         </div>
       </div>

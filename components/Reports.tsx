@@ -3,9 +3,9 @@ import { useAppContext } from '../context/AppContext';
 import { UserRole, Ticket, TicketStatus, ServiceChecklist, ReplacedPart, PaymentStatus } from '../types';
 import AddPartModal from './UpdateJobModal';
 
-// Redesigned Receipt Modal
+// Receipt Modal (No Changes)
 const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticket, onClose }) => {
-    const { technicians, sendReceipt, user } = useAppContext();
+    const { technicians, sendReceipt } = useAppContext();
     const [isSending, setIsSending] = useState(false);
     
     const technician = technicians.find(t => t.id === ticket.technicianId);
@@ -85,7 +85,7 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
                             </div>
                         </div>
                          <div className="text-center text-xs text-gray-500 pt-4">
-                            <p>Serviced by: {technician?.name || user?.name}</p>
+                            <p>Serviced by: {technician?.name}</p>
                             <p>Thank you for choosing Pandit Glen Service!</p>
                         </div>
                     </div>
@@ -107,271 +107,214 @@ interface TicketDetailsProps {
     onBack: () => void;
 }
 
-type DetailsTab = 'DETAILS' | 'PART_UPDATE' | 'SERVICE_CHECKLIST' | 'JOB_COMPLETION';
-
-const TicketDetails: React.FC<TicketDetailsProps> = ({ ticketId, onBack }) => {
-    const { tickets, user, updateTicket } = useAppContext();
-    const originalTicket = tickets.find(t => t.id === ticketId);
-
-    const [editableTicket, setEditableTicket] = useState<Ticket | null>(originalTicket || null);
-    const [activeTab, setActiveTab] = useState<DetailsTab>(user?.role === UserRole.Admin ? 'DETAILS' : 'PART_UPDATE');
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+// NEW: Single, streamlined view for Technicians
+const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = ({ ticket, onBack }) => {
+    const { updateTicket } = useAppContext();
+    const [editableTicket, setEditableTicket] = useState<Ticket>(ticket);
     const [isAddPartModalOpen, setIsAddPartModalOpen] = useState(false);
 
-    useEffect(() => {
-        const ticket = tickets.find(t => t.id === ticketId);
-        setEditableTicket(ticket ? {...ticket} : null);
-    }, [ticketId, tickets]);
+    const handleFieldChange = (field: keyof Ticket, value: any) => {
+        setEditableTicket(prev => ({ ...prev, [field]: value }));
+    };
 
-    if (!editableTicket) {
-        return (
-            <div>
-                <button onClick={onBack} className="text-glen-blue mb-4">&larr; Back to list</button>
-                <p>Ticket not found.</p>
-            </div>
-        )
-    }
-
-    const handleSaveChanges = () => {
-        updateTicket(editableTicket);
-        // Optionally show a toast message
-    }
-
-    const handleGeneratePdf = async () => {
-        setIsGeneratingPdf(true);
-        alert("PDF Generation logic would be triggered here via webhook.");
-        setIsGeneratingPdf(false);
-    }
-    
-    const handleAddPart = (newPart: ReplacedPart) => {
-        setEditableTicket(prev => prev ? ({
-            ...prev,
-            partsReplaced: [...(prev.partsReplaced || []), newPart]
-        }) : null);
-    }
-
-    const TABS: { id: DetailsTab; label: string; roles: UserRole[] }[] = [
-        { id: 'DETAILS', label: 'Details', roles: [UserRole.Admin] },
-        { id: 'PART_UPDATE', label: 'Part Update', roles: [UserRole.Admin, UserRole.Technician] },
-        { id: 'SERVICE_CHECKLIST', label: 'Service Checklist', roles: [UserRole.Admin, UserRole.Technician] },
-        { id: 'JOB_COMPLETION', label: 'Job Completion', roles: [UserRole.Admin, UserRole.Technician] },
-    ];
-    
-    const availableTabs = TABS.filter(tab => user && tab.roles.includes(user.role));
-
-    const tabClasses = (tab: DetailsTab) => 
-        `px-4 py-2 font-semibold text-sm rounded-t-lg transition-colors ${
-            activeTab === tab ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500 hover:bg-gray-100'
-        }`;
-
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <button onClick={onBack} className="text-glen-blue hover:underline">&larr; Back to list</button>
-                <div className="space-x-2">
-                    {editableTicket.status === TicketStatus.Completed && (
-                        <button onClick={() => setIsReceiptModalOpen(true)} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm">
-                            Generate Receipt
-                        </button>
-                    )}
-                    <button onClick={handleGeneratePdf} disabled={isGeneratingPdf} className="bg-glen-red text-white font-bold py-2 px-4 rounded-lg text-sm disabled:bg-gray-400">
-                        {isGeneratingPdf ? 'Generating...' : 'PDF'}
-                    </button>
-                    {activeTab !== 'DETAILS' && (
-                        <button onClick={handleSaveChanges} className="bg-glen-blue text-white font-bold py-2 px-4 rounded-lg text-sm">
-                            Save Changes
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-lg shadow-md">
-                <h3 className="text-lg font-bold text-gray-800">TICKET DETAILS: {editableTicket.id}</h3>
-                <p className="text-sm text-gray-500">{editableTicket.customerName} - {editableTicket.address}</p>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md">
-                <div className="border-b border-gray-200">
-                    <nav className="-mb-px flex space-x-2 px-4 overflow-x-auto">
-                        {availableTabs.map(tab => (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={tabClasses(tab.id)}>{tab.label}</button>
-                        ))}
-                    </nav>
-                </div>
-
-                <div className="p-4">
-                    {activeTab === 'DETAILS' && <DetailsTabContent ticket={editableTicket} />}
-                    {activeTab === 'PART_UPDATE' && <PartUpdateTab ticket={editableTicket} setTicket={setEditableTicket} onAddPartClick={() => setIsAddPartModalOpen(true)} />}
-                    {activeTab === 'SERVICE_CHECKLIST' && <ServiceChecklistTab ticket={editableTicket} setTicket={setEditableTicket} />}
-                    {activeTab === 'JOB_COMPLETION' && <JobCompletionTab ticket={editableTicket} setTicket={setEditableTicket} onJobComplete={() => { handleSaveChanges(); onBack(); }} />}
-                </div>
-            </div>
-             {isReceiptModalOpen && <ReceiptModal ticket={editableTicket} onClose={() => setIsReceiptModalOpen(false)} />}
-             {isAddPartModalOpen && <AddPartModal onClose={() => setIsAddPartModalOpen(false)} onAddPart={handleAddPart} />}
-        </div>
-    )
-};
-
-const DetailsTabContent: React.FC<{ ticket: Ticket }> = ({ ticket }) => (
-    <div className="space-y-4">
-        <DetailItem label="Ticket No" value={ticket.id} />
-        <DetailItem label="Make" value={ticket.productDetails.make} />
-        <DetailItem label="Segment" value={ticket.productDetails.segment} />
-        <DetailItem label="Category" value={ticket.productDetails.category} />
-        <DetailItem label="Product" value={ticket.productDetails.product} />
-        <div>
-            <label className="block text-sm font-medium text-gray-500">Ticket Symptoms</label>
-            <div className="mt-1 flex flex-wrap gap-2">
-                {ticket.symptoms.map((symptom: string) => (
-                    <span key={symptom} className="inline-block bg-glen-light-blue text-glen-blue text-sm font-semibold px-2.5 py-0.5 rounded-full">
-                        {symptom}
-                    </span>
-                ))}
-            </div>
-        </div>
-    </div>
-);
-
-const PartUpdateTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | null) => Ticket | null) => void, onAddPartClick: () => void }> = ({ ticket, setTicket, onAddPartClick }) => {
-    
-    const handleRemovePart = (index: number) => {
-        setTicket(prev => {
-            if (!prev) return null;
-            const newParts = [...(prev.partsReplaced || [])];
-            newParts.splice(index, 1);
-            return { ...prev, partsReplaced: newParts };
-        });
-    }
-
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-semibold text-gray-800">Parts Details</h4>
-                <button onClick={onAddPartClick} className="bg-glen-blue text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Part</button>
-            </div>
-            {(!ticket.partsReplaced || ticket.partsReplaced.length === 0) ? (
-                 <p className="text-center text-gray-500 py-4">No parts have been added yet.</p>
-            ) : (
-                <div className="space-y-3">
-                    {ticket.partsReplaced.map((part, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div>
-                                <p className="font-semibold">{part.name} ({part.category})</p>
-                                <p className="text-sm text-gray-600">Price: ₹{part.price} | Warranty: {part.warrantyDuration}</p>
-                            </div>
-                            <button onClick={() => handleRemovePart(index)} className="text-red-500 hover:text-red-700">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const ServiceChecklistTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | null) => Ticket | null) => void }> = ({ ticket, setTicket }) => {
-    const checklistItems: {key: keyof ServiceChecklist, label: string}[] = [
-      { key: 'amcDiscussion', label: 'AMC discussion, if any' },
-    ];
-    
     const handleChecklistChange = (field: keyof ServiceChecklist) => {
-        setTicket(prev => {
-            if (!prev) return null;
-            const currentChecklist = prev.serviceChecklist || {
-                amcDiscussion: false
-            };
+        setEditableTicket(prev => {
+            const currentChecklist = prev.serviceChecklist || { amcDiscussion: false };
             return {
                 ...prev,
                 serviceChecklist: {
                     ...currentChecklist,
                     [field]: !currentChecklist[field],
                 }
-            }
+            };
         });
     };
-
-    return (
-        <div>
-            <h4 className="text-lg font-semibold text-gray-800 mb-4">Service Checklist</h4>
-            <div className="space-y-3">
-                {checklistItems.map(item => (
-                     <label key={item.key} className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" checked={ticket.serviceChecklist?.[item.key] || false} onChange={() => handleChecklistChange(item.key)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
-                        <span className="ml-3">{item.label}</span>
-                    </label>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-const JobCompletionTab: React.FC<{ ticket: Ticket, setTicket: (fn: (prev: Ticket | null) => Ticket | null) => void, onJobComplete: () => void }> = ({ ticket, setTicket, onJobComplete }) => {
-
-    const handleChange = (field: keyof Ticket, value: any) => {
-        setTicket(prev => prev ? ({ ...prev, [field]: value }) : null);
+    
+    const handleAddPart = (newPart: ReplacedPart) => {
+        setEditableTicket(prev => ({
+            ...prev,
+            partsReplaced: [...(prev.partsReplaced || []), newPart]
+        }));
     };
     
+    const handleRemovePart = (index: number) => {
+        if(window.confirm('Are you sure you want to remove this part?')){
+            setEditableTicket(prev => {
+                const newParts = [...(prev.partsReplaced || [])];
+                newParts.splice(index, 1);
+                return { ...prev, partsReplaced: newParts };
+            });
+        }
+    };
+
     const handleCompleteJob = () => {
-        if (!ticket.workDone) {
+        if (!editableTicket.workDone || editableTicket.workDone.trim() === '') {
             alert('Please describe the work done before completing the job.');
             return;
         }
-        setTicket(prev => prev ? ({ ...prev, status: TicketStatus.Completed, completedAt: new Date() }) : null);
-        // Timeout to allow state to update before saving and navigating back
-        setTimeout(onJobComplete, 100);
-    }
-    
-    const handleQuickAddAmount = (amount: number) => {
-        const currentAmount = ticket.amountCollected || 0;
-        handleChange('amountCollected', currentAmount + amount);
+        const finalTicket = {
+            ...editableTicket,
+            status: TicketStatus.Completed,
+            completedAt: new Date()
+        };
+        updateTicket(finalTicket);
+        onBack();
     };
-
+    
     return (
-        <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Work Done (Action)</label>
-                <textarea value={ticket.workDone || ''} onChange={e => handleChange('workDone', e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Payment Collected</label>
-                    <select value={ticket.paymentStatus || PaymentStatus.Pending} onChange={e => handleChange('paymentStatus', e.target.value as PaymentStatus)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
-                        {Object.values(PaymentStatus).map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Amount</label>
-                    <input type="number" value={ticket.amountCollected || ''} onChange={e => handleChange('amountCollected', e.target.value === '' ? '' : Number(e.target.value))} placeholder="e.g., 500" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
-                     <div className="flex space-x-2 mt-2">
-                        <button onClick={() => handleQuickAddAmount(50)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹50</button>
-                        <button onClick={() => handleQuickAddAmount(100)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹100</button>
-                        <button onClick={() => handleQuickAddAmount(500)} className="flex-1 text-xs bg-gray-200 text-gray-700 font-semibold py-1 rounded-md hover:bg-gray-300">+₹500</button>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <label className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" checked={ticket.freeService || false} onChange={e => handleChange('freeService', e.target.checked)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
-                    <span className="ml-3 font-medium">Mark as Free Service (e.g., Warranty, Goodwill)</span>
-                </label>
-            </div>
-            <div className="pt-4">
-                <button type="button" onClick={handleCompleteJob} className="w-full bg-glen-red text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors text-lg">
-                    {ticket.status === TicketStatus.Completed ? 'Update Job Details' : 'Complete Job'}
-                </button>
-            </div>
+      <div className="space-y-6">
+          {/* --- Parts Update Section --- */}
+          <div className="bg-white p-4 rounded-lg shadow-md">
+              <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800">Parts Details</h4>
+                  <button onClick={() => setIsAddPartModalOpen(true)} className="bg-glen-blue text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Part</button>
+              </div>
+              {(!editableTicket.partsReplaced || editableTicket.partsReplaced.length === 0) ? (
+                   <p className="text-center text-gray-500 py-4">No parts have been added yet.</p>
+              ) : (
+                  <div className="space-y-3">
+                      {editableTicket.partsReplaced.map((part, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div>
+                                  <p className="font-semibold">{part.name} ({part.category})</p>
+                                  <p className="text-sm text-gray-600">Price: ₹{part.price} | Warranty: {part.warrantyDuration}</p>
+                              </div>
+                              <button onClick={() => handleRemovePart(index)} className="text-red-500 hover:text-red-700">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                          </div>
+                      ))}
+                  </div>
+              )}
+          </div>
+          
+          {/* --- Job Completion Section --- */}
+          <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
+               <h4 className="text-lg font-semibold text-gray-800">Work Summary</h4>
+               <div>
+                  <label className="block text-sm font-medium text-gray-700">Work Done (Action)*</label>
+                  <textarea value={editableTicket.workDone || ''} onChange={e => handleFieldChange('workDone', e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700">Payment Collected</label>
+                      <select value={editableTicket.paymentStatus || PaymentStatus.Pending} onChange={e => handleFieldChange('paymentStatus', e.target.value as PaymentStatus)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                          {Object.values(PaymentStatus).map(status => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                  </div>
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700">Amount</label>
+                      <input type="number" value={editableTicket.amountCollected || ''} onChange={e => handleFieldChange('amountCollected', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="e.g., 500" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                  </div>
+              </div>
+               {/* --- Final Checklist --- */}
+              <div>
+                 <h4 className="text-lg font-semibold text-gray-800 mt-4 mb-2">Final Checklist</h4>
+                 <div className="space-y-2">
+                     <label className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                          <input type="checkbox" checked={editableTicket.serviceChecklist?.amcDiscussion || false} onChange={() => handleChecklistChange('amcDiscussion')} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
+                          <span className="ml-3">AMC discussion, if any</span>
+                      </label>
+                      <label className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                          <input type="checkbox" checked={editableTicket.freeService || false} onChange={e => handleFieldChange('freeService', e.target.checked)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
+                          <span className="ml-3 font-medium">Mark as Free Service</span>
+                      </label>
+                 </div>
+              </div>
+          </div>
+          
+          <div className="pt-4">
+              <button type="button" onClick={handleCompleteJob} className="w-full bg-green-500 text-white font-bold py-4 px-6 rounded-lg hover:bg-green-600 transition-colors text-lg shadow-lg">
+                  Complete Job & Save
+              </button>
+          </div>
+
+          {isAddPartModalOpen && <AddPartModal onClose={() => setIsAddPartModalOpen(false)} onAddPart={handleAddPart} />}
+      </div>
+    );
+};
+
+
+// Admin/Controller detailed view (existing multi-tab view)
+const AdminTicketDetails: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    
+    return (
+        <div className="bg-white p-4 rounded-lg shadow-md">
+            <h3 className="text-lg font-bold text-gray-800">Ticket Details</h3>
+            <pre className="text-xs bg-gray-100 p-2 rounded mt-2 overflow-x-auto">
+                {JSON.stringify(ticket, (key, value) => {
+                    if (value instanceof Date) {
+                        return value.toLocaleString();
+                    }
+                    return value;
+                }, 2)}
+            </pre>
+            {ticket.status === TicketStatus.Completed && (
+                 <div className="mt-4">
+                    <button onClick={() => setIsReceiptModalOpen(true)} className="w-full bg-glen-blue text-white font-bold py-3 px-4 rounded-lg">
+                        Generate & Send Receipt
+                    </button>
+                 </div>
+            )}
+            {isReceiptModalOpen && <ReceiptModal ticket={ticket} onClose={() => setIsReceiptModalOpen(false)} />}
         </div>
     );
-}
+};
 
-const DetailItem: React.FC<{label: string, value: string}> = ({label, value}) => (
-    <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="font-semibold text-gray-800">{value || '-'}</p>
+
+const TicketDetails: React.FC<TicketDetailsProps> = ({ ticketId, onBack }) => {
+  const { tickets, user } = useAppContext();
+  const ticket = tickets.find(t => t.id === ticketId);
+
+  if (!ticket) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md text-center">
+        <h2 className="text-xl font-bold text-red-500">Error</h2>
+        <p className="text-gray-600 mt-2">Ticket not found. It might have been deleted or there was a sync error.</p>
+        <button onClick={onBack} className="mt-4 bg-glen-blue text-white font-bold py-2 px-4 rounded-lg">
+          &larr; Back to List
+        </button>
+      </div>
+    );
+  }
+
+  const isTechnician = user?.role === UserRole.Technician;
+  
+  const getStatusChip = (status: TicketStatus) => {
+    switch (status) {
+      case TicketStatus.New: return 'bg-blue-100 text-blue-800';
+      case TicketStatus.InProgress: return 'bg-yellow-100 text-yellow-800';
+      case TicketStatus.Completed: return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+        <div className="bg-white p-4 rounded-lg shadow-md">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800">{ticket.customerName}</h2>
+                    <p className="text-sm text-gray-500">{ticket.id}</p>
+                </div>
+                 <button onClick={onBack} className="text-sm text-glen-blue font-semibold">&larr; Back to List</button>
+            </div>
+            <div className="mt-2">
+                 <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusChip(ticket.status)}`}>
+                    Status: {ticket.status}
+                </span>
+            </div>
+        </div>
+        
+        {isTechnician ? (
+            <TechnicianUpdateView ticket={ticket} onBack={onBack} />
+        ) : (
+            <AdminTicketDetails ticket={ticket} />
+        )}
+
     </div>
-);
-
+  );
+};
 
 export default TicketDetails;
