@@ -102,7 +102,7 @@ const PayloadManager: React.FC<{
                 {Object.entries(payload).map(([key, value]) => (
                     <div key={key} className="flex items-center space-x-2">
                         <input type="text" value={key} onChange={e => handleKeyChange(key, e.target.value)} className="w-1/3 px-2 py-1 border rounded-md text-sm font-mono"/>
-                        <input type="text" value={value} onChange={e => handlePayloadChange(key, e.target.value)} className="w-2/3 px-2 py-1 border rounded-md text-sm font-mono"/>
+                        <input type="text" value={String(value)} onChange={e => handlePayloadChange(key, e.target.value)} className="w-2/3 px-2 py-1 border rounded-md text-sm font-mono"/>
                         <button onClick={() => handleDeleteField(key)} className="text-red-500 hover:text-red-700 p-1">
                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
@@ -125,6 +125,33 @@ const PayloadManager: React.FC<{
 
 const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('automation');
+  // State is lifted up to be controlled by the single Save button in the footer
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [complaintSheetUrl, setComplaintSheetUrl] = useState('');
+  const [updateSheetUrl, setUpdateSheetUrl] = useState('');
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const { technicians: contextTechnicians, addTechnician, updateTechnician, deleteTechnician } = useAppContext();
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    setWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
+    setComplaintSheetUrl(localStorage.getItem('complaintSheetUrl') || '');
+    setUpdateSheetUrl(localStorage.getItem('updateSheetUrl') || '');
+    setTechnicians(contextTechnicians);
+  }, [contextTechnicians]);
+
+  const handleSaveAndClose = () => {
+    // Save Automation Settings
+    localStorage.setItem('masterWebhookUrl', webhookUrl);
+    localStorage.setItem('complaintSheetUrl', complaintSheetUrl);
+    localStorage.setItem('updateSheetUrl', updateSheetUrl);
+
+    // This modal doesn't directly manage technicians anymore, but if it did, save logic would be here.
+    // The TechnicianManagement component now calls context functions directly.
+    
+    addToast('Settings saved successfully!', 'success');
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -142,43 +169,70 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
         </div>
         <div className="p-6 overflow-y-auto flex-grow">
-            {activeTab === 'automation' && <AutomationSettings />}
+            {activeTab === 'automation' && <AutomationSettings 
+                webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
+                complaintSheetUrl={complaintSheetUrl} setComplaintSheetUrl={setComplaintSheetUrl}
+                updateSheetUrl={updateSheetUrl} setUpdateSheetUrl={setUpdateSheetUrl}
+             />}
             {activeTab === 'technicians' && <TechnicianManagement />}
+        </div>
+        <div className="p-4 bg-gray-50 border-t flex justify-end space-x-3 sticky bottom-0">
+            <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+            <button type="button" onClick={handleSaveAndClose} className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors">Save & Close</button>
         </div>
       </div>
     </div>
   );
 };
 
+interface AutomationSettingsProps {
+    webhookUrl: string;
+    setWebhookUrl: (url: string) => void;
+    complaintSheetUrl: string;
+    setComplaintSheetUrl: (url: string) => void;
+    updateSheetUrl: string;
+    setUpdateSheetUrl: (url: string) => void;
+}
 
-const AutomationSettings: React.FC = () => {
-  const [masterWebhookUrl, setMasterWebhookUrl] = useState('');
-  const { addToast } = useToast();
-
-  useEffect(() => {
-    setMasterWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
-  }, []);
-
-  const handleSave = () => {
-    localStorage.setItem('masterWebhookUrl', masterWebhookUrl);
-    addToast('Webhook URL saved!', 'success');
-  };
-
+const AutomationSettings: React.FC<AutomationSettingsProps> = ({ 
+    webhookUrl, setWebhookUrl,
+    complaintSheetUrl, setComplaintSheetUrl,
+    updateSheetUrl, setUpdateSheetUrl
+}) => {
    return (
     <div className="space-y-6">
       <div>
-        <h4 className="text-lg font-semibold text-gray-800 mb-2">Webhook Configuration</h4>
-         <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
-            <input
-                type="url"
-                value={masterWebhookUrl}
-                onChange={(e) => setMasterWebhookUrl(e.target.value)}
-                placeholder="https://hook.make.com/..."
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
-            />
-             <div className="flex justify-end">
-                <button type="button" onClick={handleSave} className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors">Save URL</button>
+        <h4 className="text-lg font-semibold text-gray-800 mb-2">Webhook & Sheet Configuration</h4>
+         <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
+              <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://hook.make.com/..."
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Complaint Sheet URL (Sheet 1)</label>
+              <input
+                  type="url"
+                  value={complaintSheetUrl}
+                  onChange={(e) => setComplaintSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Technician Update Sheet URL (Sheet 2)</label>
+              <input
+                  type="url"
+                  value={updateSheetUrl}
+                  onChange={(e) => setUpdateSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
+              />
             </div>
         </div>
       </div>
@@ -251,7 +305,7 @@ const TechnicianManagement: React.FC = () => {
                                     </div>
                                     <div className="space-x-2">
                                         <button onClick={() => setEditingTech(tech)} className="text-sm bg-gray-200 py-1 px-3 rounded-lg">Edit</button>
-                                        <button onClick={() => handleDelete(tech.id)} className="text-sm bg-red-500 text-white py-1 px-3 rounded-lg">Delete</button>
+                                        {tech.id !== 'tech-test' && <button onClick={() => handleDelete(tech.id)} className="text-sm bg-red-500 text-white py-1 px-3 rounded-lg">Delete</button>}
                                     </div>
                                 </>
                             )}
