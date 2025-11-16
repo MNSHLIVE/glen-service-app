@@ -19,6 +19,8 @@ export const COMPLAINT_SHEET_HEADERS = [
 export const TECHNICIAN_UPDATE_HEADERS = [
   'Ticket ID',
   'Created At',
+  'Service Booking Date',
+  'Preferred Time',
   'Customer Name',
   'Phone',
   'Address',

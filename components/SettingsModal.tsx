@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Technician } from '../types';
 import { useToast } from '../context/ToastContext';
@@ -13,9 +13,10 @@ const PayloadManager: React.FC<{
     defaultHeaders: string[];
 }> = ({ title, action, defaultHeaders }) => {
     const { sendCustomWebhookPayload } = useAppContext();
-    const [payload, setPayload] = useState<Record<string, any>>({});
-    
-    const generateDefaultPayload = () => {
+    const [payload, setPayload] = useState<Array<{ id: number; key: string; value: any }>>([]);
+    const nextId = React.useRef(0);
+
+    const generateDefaultPayload = useCallback(() => {
         const now = new Date();
         const defaultData: Record<string, any> = {
             'Ticket ID': `SB-TEST-${Date.now()}`,
@@ -46,49 +47,54 @@ const PayloadManager: React.FC<{
             });
         }
         
-        // Ensure all default headers are present
-        const finalPayload: Record<string, any> = {};
-        defaultHeaders.forEach(header => {
-            finalPayload[header] = defaultData[header] ?? '';
+        const finalPayload = defaultHeaders.map((header) => {
+             const id = nextId.current++;
+             return {
+                id: id,
+                key: header,
+                value: defaultData[header] ?? '',
+            };
         });
+
         return finalPayload;
-    };
+    }, [action, defaultHeaders]);
 
     useEffect(() => {
         setPayload(generateDefaultPayload());
-    }, [action]);
+    }, [generateDefaultPayload]);
 
-    const handlePayloadChange = (key: string, value: string) => {
-        setPayload(prev => ({ ...prev, [key]: value }));
+    const handleValueChange = (id: number, value: string) => {
+        setPayload(prev => prev.map(item => item.id === id ? { ...item, value } : item));
     };
 
-    const handleKeyChange = (oldKey: string, newKey: string) => {
-        if (newKey && !payload.hasOwnProperty(newKey)) {
-             const newPayload = { ...payload };
-             const value = newPayload[oldKey];
-             delete newPayload[oldKey];
-             newPayload[newKey] = value;
-             setPayload(newPayload);
-        }
+    const handleKeyChange = (id: number, newKey: string) => {
+        setPayload(prev => prev.map(item => item.id === id ? { ...item, key: newKey } : item));
     };
     
     const handleAddField = () => {
-        const newKey = `newField_${Object.keys(payload).length + 1}`;
-        if (!payload.hasOwnProperty(newKey)) {
-            setPayload(prev => ({ ...prev, [newKey]: 'sample value' }));
-        }
+        const newField = {
+            id: nextId.current++,
+            key: `newField_${nextId.current}`,
+            value: 'sample value'
+        };
+        setPayload(prev => [...prev, newField]);
     };
     
-    const handleDeleteField = (key: string) => {
-        if (window.confirm(`Are you sure you want to delete the field "${key}"?`)){
-            const newPayload = { ...payload };
-            delete newPayload[key];
-            setPayload(newPayload);
+    const handleDeleteField = (id: number) => {
+        if (window.confirm(`Are you sure you want to delete this field?`)){
+            setPayload(prev => prev.filter(item => item.id !== id));
         }
     };
 
     const handleSendTest = () => {
-        sendCustomWebhookPayload(action, payload);
+        const objectPayload = payload.reduce((acc, item) => {
+            if (item.key) {
+                acc[item.key] = item.value;
+            }
+            return acc;
+        }, {} as Record<string, any>);
+
+        sendCustomWebhookPayload(action, objectPayload);
     };
 
     const handleReset = () => {
@@ -99,11 +105,11 @@ const PayloadManager: React.FC<{
          <div className="border p-4 rounded-lg bg-gray-50">
             <h5 className="font-bold text-gray-700 mb-2">{title}</h5>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                {Object.entries(payload).map(([key, value]) => (
-                    <div key={key} className="flex items-center space-x-2">
-                        <input type="text" value={key} onChange={e => handleKeyChange(key, e.target.value)} className="w-1/3 px-2 py-1 border rounded-md text-sm font-mono"/>
-                        <input type="text" value={String(value)} onChange={e => handlePayloadChange(key, e.target.value)} className="w-2/3 px-2 py-1 border rounded-md text-sm font-mono"/>
-                        <button onClick={() => handleDeleteField(key)} className="text-red-500 hover:text-red-700 p-1">
+                {payload.map((item) => (
+                    <div key={item.id} className="grid grid-cols-[30%_1fr_auto] gap-2 items-center">
+                        <input type="text" value={item.key} onChange={e => handleKeyChange(item.id, e.target.value)} className="w-full px-2 py-1 border rounded-md text-sm font-mono"/>
+                        <input type="text" value={String(item.value)} onChange={e => handleValueChange(item.id, e.target.value)} className="w-full px-2 py-1 border rounded-md text-sm font-mono"/>
+                        <button onClick={() => handleDeleteField(item.id)} className="text-red-500 hover:text-red-700 p-1 justify-self-center">
                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </div>
@@ -199,10 +205,58 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
     complaintSheetUrl, setComplaintSheetUrl,
     updateSheetUrl, setUpdateSheetUrl
 }) => {
+   const { addToast } = useToast();
+
+   const handleExport = () => {
+       const settings = {
+           masterWebhookUrl: webhookUrl,
+           complaintSheetUrl: complaintSheetUrl,
+           updateSheetUrl: updateSheetUrl,
+       };
+       const settingsString = JSON.stringify(settings, null, 2);
+       navigator.clipboard.writeText(settingsString)
+           .then(() => {
+               addToast('Settings copied to clipboard!', 'success');
+           })
+           .catch(err => {
+               console.error('Failed to copy settings: ', err);
+               addToast('Could not copy settings.', 'error');
+           });
+   };
+
+   const handleImport = () => {
+       const pastedSettings = window.prompt("Paste your exported settings configuration here:");
+       if (pastedSettings) {
+           try {
+               const parsedSettings = JSON.parse(pastedSettings);
+               if (parsedSettings.masterWebhookUrl !== undefined && 
+                   parsedSettings.complaintSheetUrl !== undefined && 
+                   parsedSettings.updateSheetUrl !== undefined) {
+                   
+                   setWebhookUrl(parsedSettings.masterWebhookUrl);
+                   setComplaintSheetUrl(parsedSettings.complaintSheetUrl);
+                   setUpdateSheetUrl(parsedSettings.updateSheetUrl);
+                   addToast('Settings imported successfully!', 'success');
+               } else {
+                   throw new Error("Missing required keys in settings object.");
+               }
+           } catch (error) {
+               console.error("Failed to parse settings:", error);
+               addToast('Invalid settings format. Please paste the exact text you exported.', 'error');
+           }
+       }
+   };
+
    return (
     <div className="space-y-6">
       <div>
-        <h4 className="text-lg font-semibold text-gray-800 mb-2">Webhook & Sheet Configuration</h4>
+        <div className="flex justify-between items-center mb-2">
+            <h4 className="text-lg font-semibold text-gray-800">Webhook & Sheet Configuration</h4>
+            <div className="flex space-x-2">
+                <button onClick={handleImport} className="text-sm bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Import</button>
+                <button onClick={handleExport} className="text-sm bg-glen-blue text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">Export</button>
+            </div>
+        </div>
          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
