@@ -23,6 +23,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
     const [inputFile, setInputFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isCooldown, setIsCooldown] = useState(false); // New state for cooldown
     const [error, setError] = useState('');
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,12 +101,26 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             const parsedData = JSON.parse(jsonString);
             onParsed(parsedData);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setError('Failed to parse the data. The AI could not understand the input. Please check the content or try again.');
+             // Specific handling for 429 errors
+            if (err.message && (err.message.includes('429') || err.message.toLowerCase().includes('rate limit'))) {
+                setError('Too many requests. Please wait a few seconds before trying again.');
+            } else {
+                setError('Failed to parse the data. The AI could not understand the input. Please check the content or try again.');
+            }
         } finally {
             setIsLoading(false);
+            // Start cooldown period
+            setIsCooldown(true);
+            setTimeout(() => setIsCooldown(false), 5000); // 5-second cooldown
         }
+    };
+
+    const getButtonText = () => {
+        if (isLoading) return 'Analyzing...';
+        if (isCooldown) return 'Please wait...';
+        return 'Analyze & Prefill';
     };
 
     return (
@@ -152,11 +167,11 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                         <button 
                             type="button" 
                             onClick={handleParse} 
-                            disabled={isLoading}
+                            disabled={isLoading || isCooldown}
                             className="bg-glen-blue text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center"
                         >
                             {isLoading && <Spinner />}
-                            {isLoading ? 'Analyzing...' : 'Analyze & Prefill'}
+                            {getButtonText()}
                         </button>
                     </div>
                 </div>

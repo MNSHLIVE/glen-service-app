@@ -234,25 +234,72 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
     );
 };
 
+// --- Reusable Detail Components for Admin View ---
+const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div className="border-t pt-4">
+        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{title}</h4>
+        <div className="space-y-2">{children}</div>
+    </div>
+);
 
-// Admin/Controller detailed view (existing multi-tab view)
+const DetailItem: React.FC<{ label: string; value?: string | number | null | boolean; children?: React.ReactNode; }> = ({ label, value, children }) => (
+    <div className="grid grid-cols-3 gap-4 text-sm">
+        <p className="text-gray-600 col-span-1">{label}</p>
+        <div className="text-gray-900 font-medium col-span-2">
+            {children || (value === true ? 'Yes' : value === false ? 'No' : value || 'N/A')}
+        </div>
+    </div>
+);
+
+// --- OVERHAULED Admin/Controller detailed view ---
 const AdminTicketDetails: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-    
+    const { technicians } = useAppContext();
+    const assignedTechnician = technicians.find(t => t.id === ticket.technicianId);
+
     return (
-        <div className="bg-white p-4 rounded-lg shadow-md">
-            <h3 className="text-lg font-bold text-gray-800">Ticket Details</h3>
-            <pre className="text-xs bg-gray-100 p-2 rounded mt-2 overflow-x-auto">
-                {JSON.stringify(ticket, (key, value) => {
-                    if (value instanceof Date) {
-                        return value.toLocaleString();
-                    }
-                    return value;
-                }, 2)}
-            </pre>
+        <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
+            <DetailSection title="Customer & Job Info">
+                <DetailItem label="Customer" value={ticket.customerName} />
+                <DetailItem label="Phone" value={ticket.phone} />
+                <DetailItem label="Address" value={ticket.address} />
+                <DetailItem label="Booking Date" value={new Date(ticket.serviceBookingDate).toLocaleString()} />
+                <DetailItem label="Preferred Time" value={ticket.preferredTime} />
+                <DetailItem label="Complaint" value={ticket.complaint} />
+                <DetailItem label="Assigned To" value={assignedTechnician?.name} />
+            </DetailSection>
+
             {ticket.status === TicketStatus.Completed && (
-                 <div className="mt-4">
-                    <button onClick={() => setIsReceiptModalOpen(true)} className="w-full bg-glen-blue text-white font-bold py-3 px-4 rounded-lg">
+                 <DetailSection title="Completion Summary">
+                    <DetailItem label="Completed At" value={ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A'} />
+                    <DetailItem label="Work Done" value={ticket.workDone} />
+                    <DetailItem label="Payment Mode" value={ticket.paymentStatus} />
+                    <DetailItem label="Amount Paid">
+                        <span className="font-bold text-glen-blue">₹{ticket.amountCollected?.toFixed(2) || '0.00'}</span>
+                    </DetailItem>
+                    <DetailItem label="AMC Discussed" value={ticket.serviceChecklist?.amcDiscussion} />
+                    <DetailItem label="Free Service" value={ticket.freeService} />
+                </DetailSection>
+            )}
+
+            {ticket.partsReplaced && ticket.partsReplaced.length > 0 && (
+                 <DetailSection title="Parts Replaced">
+                     <div className="space-y-2">
+                        {ticket.partsReplaced.map((part, index) => (
+                            <div key={index} className="p-2 bg-gray-50 rounded-md text-sm">
+                                <p className="font-semibold">{part.name}</p>
+                                <p className="text-xs text-gray-600">
+                                    Price: ₹{part.price} | Warranty: {part.warrantyDuration} | Category: {part.category}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </DetailSection>
+            )}
+
+            {ticket.status === TicketStatus.Completed && (
+                 <div className="mt-4 pt-4 border-t">
+                    <button onClick={() => setIsReceiptModalOpen(true)} className="w-full bg-glen-blue text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors">
                         Generate & Send Receipt
                     </button>
                  </div>

@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
+
+type AutomationStatus = 'online' | 'error' | 'unconfigured';
 
 interface AppContextType {
   user: User | null;
@@ -10,6 +13,8 @@ interface AppContextType {
   technicians: Technician[];
   feedback: Feedback[];
   isSyncing: boolean;
+  automationStatus: AutomationStatus;
+  checkAutomationStatus: () => Promise<void>;
   login: (user: User) => void;
   logout: () => void;
   addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
@@ -21,8 +26,8 @@ interface AppContextType {
   deleteTechnician: (techId: string) => void;
   sendReceipt: (ticketId: string) => void;
   resetAllTechnicianPoints: () => void;
-  syncTickets: () => Promise<void>;
-  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => void;
+  syncTickets: () => Promise<boolean>; // Return boolean for success/fail
+  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -58,6 +63,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [automationStatus, setAutomationStatus] = useState<AutomationStatus>('unconfigured');
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -97,6 +103,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem('tickets', JSON.stringify(tickets));
   }, [tickets]);
 
+  const checkAutomationStatus = useCallback(async () => {
+    const webhookUrl = localStorage.getItem('masterWebhookUrl');
+    if (!webhookUrl) {
+      setAutomationStatus('unconfigured');
+      return;
+    }
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'HEALTH_CHECK' }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'ok') {
+          setAutomationStatus('online');
+        } else {
+          setAutomationStatus('error');
+        }
+      } else {
+        setAutomationStatus('error');
+      }
+    } catch (error) {
+      setAutomationStatus('error');
+    }
+  }, []);
+
 
   const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
       const webhookUrl = localStorage.getItem('masterWebhookUrl');
@@ -111,13 +145,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   body: JSON.stringify(finalPayload),
               });
               if (response.ok) {
-                  console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
-                  addToast(`Automation for "${actionName}" triggered!`, 'success');
+                  // Don't show toast for health check success, the UI handles it
+                  if (action !== 'HEALTH_CHECK') {
+                    console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
+                    addToast(`Automation for "${actionName}" triggered!`, 'success');
+                  }
+                  return await response.json(); // Return the body for confirmation
               } else {
                   if (response.status === 410) {
                       console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
                       localStorage.removeItem('masterWebhookUrl');
                       addToast('Webhook URL is invalid (Error 410). It has been cleared. Please paste a new URL from Make.com and save it in Settings.', 'error');
+                      setAutomationStatus('error');
                   } else {
                       console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
                       addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
@@ -129,16 +168,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
       } else {
           console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
-          addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
+          if (action !== 'HEALTH_CHECK') {
+            addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
+          }
       }
+      return null;
   };
 
-  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => {
-     sendWebhook(
+  const sendCustomWebhookPayload = async (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>): Promise<boolean> => {
+     const response = await sendWebhook(
         action,
         { data: payload },
         `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
     );
+    // For test payloads, we now wait for a specific success message from the webhook response
+    return response?.status === 'success';
   };
 
   const login = (loggedInUser: User) => setUser(loggedInUser);
@@ -147,12 +191,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const syncTickets = async () => {
-    if (!user) return;
+  const syncTickets = async (): Promise<boolean> => {
+    if (!user) return false;
     const webhookUrl = localStorage.getItem('masterWebhookUrl');
     if (!webhookUrl) {
       addToast('Webhook URL not configured in settings.', 'error');
-      return;
+      setAutomationStatus('unconfigured');
+      return false;
     }
 
     setIsSyncing(true);
@@ -174,12 +219,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
             localStorage.removeItem('masterWebhookUrl');
             addToast('Webhook URL is invalid (Error 410). It has been cleared. Please get a new URL from Make.com and save it in Settings.', 'error');
+            setAutomationStatus('error');
         } else {
+            setAutomationStatus('error');
             throw new Error(`Sync failed with status: ${response.status}`);
         }
-        return;
+        return false;
       }
-
+      
+      setAutomationStatus('online');
       const data = await response.json();
       
       if (data.tickets && Array.isArray(data.tickets)) {
@@ -231,6 +279,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           setTickets(syncedTickets);
           addToast('Jobs synced successfully!', 'success');
+          return true;
       } else {
            throw new Error('Invalid data format received from webhook.');
       }
@@ -238,6 +287,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (error) {
       console.error('[SYNC] Error syncing tickets:', error);
       addToast('Sync failed. Check your internet and ensure the Make.com scenario is ON.', 'error');
+      setAutomationStatus('error');
+      return false;
     } finally {
       setIsSyncing(false);
     }
@@ -314,20 +365,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const flatJobCompletedPayload = {
             [TECHNICIAN_UPDATE_HEADERS[0]]: updatedTicket.id,
             [TECHNICIAN_UPDATE_HEADERS[1]]: updatedTicket.createdAt.toISOString(),
-            [TECHNICIAN_UPDATE_HEADERS[2]]: updatedTicket.customerName,
-            [TECHNICIAN_UPDATE_HEADERS[3]]: updatedTicket.phone,
-            [TECHNICIAN_UPDATE_HEADERS[4]]: updatedTicket.address,
-            [TECHNICIAN_UPDATE_HEADERS[5]]: updatedTicket.serviceCategory,
-            [TECHNICIAN_UPDATE_HEADERS[6]]: updatedTicket.complaint,
-            [TECHNICIAN_UPDATE_HEADERS[7]]: (updatedTicket.completedAt || new Date()).toISOString(),
-            [TECHNICIAN_UPDATE_HEADERS[8]]: technician?.name || 'Unassigned',
-            [TECHNICIAN_UPDATE_HEADERS[9]]: updatedTicket.workDone || '',
-            [TECHNICIAN_UPDATE_HEADERS[10]]: updatedTicket.amountCollected || 0,
-            [TECHNICIAN_UPDATE_HEADERS[11]]: updatedTicket.paymentStatus || PaymentStatus.Pending,
-            [TECHNICIAN_UPDATE_HEADERS[12]]: pointsEarned,
-            [TECHNICIAN_UPDATE_HEADERS[13]]: partsReplacedString,
-            [TECHNICIAN_UPDATE_HEADERS[14]]: updatedTicket.serviceChecklist?.amcDiscussion || false,
-            [TECHNICIAN_UPDATE_HEADERS[15]]: updatedTicket.freeService || false,
+            [TECHNICIAN_UPDATE_HEADERS[2]]: updatedTicket.serviceBookingDate.toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[3]]: updatedTicket.preferredTime,
+            [TECHNICIAN_UPDATE_HEADERS[4]]: updatedTicket.customerName,
+            [TECHNICIAN_UPDATE_HEADERS[5]]: updatedTicket.phone,
+            [TECHNICIAN_UPDATE_HEADERS[6]]: updatedTicket.address,
+            [TECHNICIAN_UPDATE_HEADERS[7]]: updatedTicket.serviceCategory,
+            [TECHNICIAN_UPDATE_HEADERS[8]]: updatedTicket.complaint,
+            [TECHNICIAN_UPDATE_HEADERS[9]]: (updatedTicket.completedAt || new Date()).toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[10]]: technician?.name || 'Unassigned',
+            [TECHNICIAN_UPDATE_HEADERS[11]]: updatedTicket.workDone || '',
+            [TECHNICIAN_UPDATE_HEADERS[12]]: updatedTicket.amountCollected || 0,
+            [TECHNICIAN_UPDATE_HEADERS[13]]: updatedTicket.paymentStatus || PaymentStatus.Pending,
+            [TECHNICIAN_UPDATE_HEADERS[14]]: pointsEarned,
+            [TECHNICIAN_UPDATE_HEADERS[15]]: partsReplacedString,
+            [TECHNICIAN_UPDATE_HEADERS[16]]: updatedTicket.serviceChecklist?.amcDiscussion || false,
+            [TECHNICIAN_UPDATE_HEADERS[17]]: updatedTicket.freeService || false,
         };
 
         sendWebhook(
@@ -423,7 +476,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, sendCustomWebhookPayload };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, sendCustomWebhookPayload, automationStatus, checkAutomationStatus };
 
   return (
     <AppContext.Provider value={contextValue}>
