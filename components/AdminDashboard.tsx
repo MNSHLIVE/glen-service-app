@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AddTicketModal from './AddTicketModal';
 import ViewJobs from './ViewJobs';
@@ -7,7 +7,7 @@ import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
 import PerformanceView from './PerformanceView'; // Import the new PerformanceView
-import { Ticket } from '../types';
+import { Ticket, WebhookStatus } from '../types';
 
 interface AdminDashboardProps {
     onViewTicket: (ticketId: string) => void;
@@ -15,40 +15,31 @@ interface AdminDashboardProps {
 
 type AdminView = 'jobs' | 'ratings' | 'performance';
 
-const AutomationStatusIndicator: React.FC = () => {
-    const { automationStatus } = useAppContext();
+const WebhookStatusIndicator: React.FC = () => {
+    const { webhookStatus } = useAppContext();
 
-    const getStatusContent = () => {
-        switch (automationStatus) {
-            case 'online':
-                return {
-                    color: 'bg-green-500',
-                    text: 'Online',
-                    tooltip: 'Automation system is connected and operational.'
-                };
-            case 'error':
-                return {
-                    color: 'bg-red-500',
-                    text: 'Error',
-                    tooltip: 'Connection failed. Check webhook URL in settings & ensure Make.com scenario is ON.'
-                };
-            case 'unconfigured':
+    const getStatusDetails = () => {
+        switch (webhookStatus) {
+            case WebhookStatus.Connected:
+                return { color: 'bg-green-500', tooltip: 'Automation Connected', pulse: false };
+            case WebhookStatus.Error:
+                return { color: 'bg-red-500', tooltip: 'Connection Error', pulse: false };
+            case WebhookStatus.Checking:
+                return { color: 'bg-yellow-500', tooltip: 'Checking Connection...', pulse: true };
+            case WebhookStatus.Simulating:
+                return { color: 'bg-yellow-500', tooltip: 'Simulation Mode', pulse: false };
+            case WebhookStatus.Unknown:
             default:
-                return {
-                    color: 'bg-yellow-500',
-                    text: 'Not Configured',
-                    tooltip: 'Please configure the Master Webhook URL in Settings.'
-                };
+                return { color: 'bg-gray-400', tooltip: 'Automation Status Unknown', pulse: false };
         }
     };
 
-    const { color, text, tooltip } = getStatusContent();
+    const { color, tooltip, pulse } = getStatusDetails();
 
     return (
-        <div className="relative group flex items-center space-x-2">
-            <span className={`w-3 h-3 rounded-full ${color}`}></span>
-            <span className="text-xs text-gray-600 font-medium">{text}</span>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+        <div className="relative group flex items-center" title={tooltip}>
+            <span className={`block w-4 h-4 rounded-full ${color} ${pulse ? 'animate-pulse' : ''}`}></span>
+            <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50">
                 {tooltip}
             </div>
         </div>
@@ -57,19 +48,13 @@ const AutomationStatusIndicator: React.FC = () => {
 
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
-  const { user, logout, syncTickets, isSyncing, checkAutomationStatus } = useAppContext();
+  const { user, logout, syncTickets, isSyncing } = useAppContext();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isIntelligentModalOpen, setIsIntelligentModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // State for settings modal
   const [intelligentMode, setIntelligentMode] = useState<'text' | 'image'>('text');
   const [parsedTicketData, setParsedTicketData] = useState<Partial<Ticket> | null>(null);
   const [activeView, setActiveView] = useState<AdminView>('jobs');
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success'>('idle');
-
-  useEffect(() => {
-    checkAutomationStatus();
-  }, []);
-
 
   const handleOpenIntelligentModal = (mode: 'text' | 'image') => {
     setIntelligentMode(mode);
@@ -87,14 +72,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
       setParsedTicketData(null); // Clear data when closing
   }
 
-  const handleSync = async () => {
-      const success = await syncTickets();
-      if (success) {
-          setSyncStatus('success');
-          setTimeout(() => setSyncStatus('idle'), 2000); // Revert back to idle after 2 seconds
-      }
-  };
-
   const navButtonClasses = (view: AdminView) =>
     `flex-1 py-3 px-2 text-center text-sm font-semibold transition-all duration-300 ${
       activeView === view
@@ -107,22 +84,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
       <div className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Welcome, {user?.name}!</h2>
-          <div className="flex items-center space-x-4 mt-1">
-             <p className="text-sm text-gray-500">Admin Dashboard</p>
-             <div className="border-l pl-4">
-                <AutomationStatusIndicator />
-             </div>
-          </div>
+          <p className="text-sm text-gray-500">Admin Dashboard</p>
         </div>
-        <div className="flex items-center space-x-2">
-            <button 
-                onClick={handleSync} 
-                disabled={isSyncing || syncStatus === 'success'} 
-                className={`text-sm text-white font-semibold p-2 rounded-lg transition-all duration-300 ${
-                    syncStatus === 'success' ? 'bg-green-500' : 'bg-blue-500 hover:bg-blue-600'
-                } disabled:bg-gray-400`}
-            >
-                {isSyncing ? <SpinnerIcon /> : syncStatus === 'success' ? <CheckIcon /> : <RefreshIcon />}
+        <div className="flex items-center space-x-3">
+            <WebhookStatusIndicator />
+            <button onClick={() => syncTickets()} disabled={isSyncing} title="Fetch Latest Jobs" className="text-sm bg-blue-500 text-white font-semibold p-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
+                {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
             <button onClick={() => setIsSettingsModalOpen(true)} className="text-sm bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors">
                 <SettingsIcon />
@@ -213,11 +180,5 @@ const SpinnerIcon: React.FC = () => (
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
 );
-const CheckIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-);
-
 
 export default AdminDashboard;

@@ -11,7 +11,6 @@ interface TechnicianViewProps {
 const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
   const { user, tickets, logout, technicians, syncTickets, isSyncing } = useAppContext();
   const [filter, setFilter] = useState<TicketStatus | 'All'>('All');
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success'>('idle');
 
   const currentTechnician = technicians.find(t => t.id === user?.id);
   const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
@@ -21,14 +20,6 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
     `px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
       filter === f ? 'bg-glen-blue text-white' : 'bg-gray-200 text-gray-700'
     }`;
-
-  const handleSync = async () => {
-      const success = await syncTickets();
-      if (success) {
-          setSyncStatus('success');
-          setTimeout(() => setSyncStatus('idle'), 2000); // Revert back to idle after 2 seconds
-      }
-  };
   
   return (
     <div className="space-y-6">
@@ -38,15 +29,9 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
           <p className="text-sm text-gray-500">Your Assigned Jobs</p>
         </div>
         <div className="flex items-center space-x-2">
-           <button 
-                onClick={handleSync} 
-                disabled={isSyncing || syncStatus === 'success'} 
-                className={`text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 flex items-center space-x-2 ${
-                    syncStatus === 'success' ? 'bg-green-500' : 'bg-blue-500 hover:bg-blue-600'
-                } disabled:bg-gray-400`}
-            >
-                {isSyncing ? <SpinnerIcon /> : syncStatus === 'success' ? <CheckIcon /> : <RefreshIcon />}
-                <span>{isSyncing ? 'Syncing...' : syncStatus === 'success' ? 'Synced!' : 'Refresh Jobs'}</span>
+           <button onClick={() => syncTickets()} disabled={isSyncing} className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center space-x-2">
+                {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
+                <span>{isSyncing ? 'Syncing...' : 'Fetch New Jobs'}</span>
             </button>
             <button onClick={logout} className="text-sm bg-glen-red text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
               Logout
@@ -77,7 +62,7 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
         </div>
       ) : (
         <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-500">
-          <p>No jobs found. Try pressing "Refresh Jobs".</p>
+          <p>No jobs found. Try pressing "Fetch New Jobs".</p>
         </div>
       )}
     </div>
@@ -93,11 +78,6 @@ const SpinnerIcon: React.FC = () => (
     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg>
-);
-const CheckIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
     </svg>
 );
 

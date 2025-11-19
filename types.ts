@@ -4,6 +4,14 @@ export enum UserRole {
   Controller = 'Controller',
 }
 
+export enum WebhookStatus {
+  Unknown = 'Unknown',
+  Checking = 'Checking',
+  Connected = 'Connected',
+  Error = 'Error',
+  Simulating = 'Simulating',
+}
+
 export interface User {
   id: string;
   name: string;

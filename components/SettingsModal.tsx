@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Technician } from '../types';
+import { Technician, WebhookStatus } from '../types';
 import { useToast } from '../context/ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
 
@@ -14,9 +13,7 @@ const PayloadManager: React.FC<{
     defaultHeaders: string[];
 }> = ({ title, action, defaultHeaders }) => {
     const { sendCustomWebhookPayload } = useAppContext();
-    const { addToast } = useToast();
     const [payload, setPayload] = useState<Array<{ id: number; key: string; value: any }>>([]);
-    const [isSending, setIsSending] = useState(false);
     const nextId = React.useRef(0);
 
     const generateDefaultPayload = useCallback(() => {
@@ -89,8 +86,7 @@ const PayloadManager: React.FC<{
         }
     };
 
-    const handleSendTest = async () => {
-        setIsSending(true);
+    const handleSendTest = () => {
         const objectPayload = payload.reduce((acc, item) => {
             if (item.key) {
                 acc[item.key] = item.value;
@@ -98,14 +94,7 @@ const PayloadManager: React.FC<{
             return acc;
         }, {} as Record<string, any>);
 
-        const success = await sendCustomWebhookPayload(action, objectPayload);
-
-        if (success) {
-            addToast('Test Successful! Make.com confirmed data was processed.', 'success');
-        } else {
-            addToast('Test Failed. Make.com did not respond with success. Check scenario filters and ensure it is ON.', 'error');
-        }
-        setIsSending(false);
+        sendCustomWebhookPayload(action, objectPayload);
     };
 
     const handleReset = () => {
@@ -120,7 +109,7 @@ const PayloadManager: React.FC<{
                     <div key={item.id} className="grid grid-cols-[30%_1fr_auto] gap-2 items-center">
                         <input type="text" value={item.key} onChange={e => handleKeyChange(item.id, e.target.value)} className="w-full px-2 py-1 border rounded-md text-sm font-mono"/>
                         <input type="text" value={String(item.value)} onChange={e => handleValueChange(item.id, e.target.value)} className="w-full px-2 py-1 border rounded-md text-sm font-mono"/>
-                        <button onClick={() => handleDeleteField(item.id)} disabled={isSending} className="text-red-500 hover:text-red-700 p-1 justify-self-center disabled:opacity-50">
+                        <button onClick={() => handleDeleteField(item.id)} className="text-red-500 hover:text-red-700 p-1 justify-self-center">
                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </div>
@@ -128,12 +117,11 @@ const PayloadManager: React.FC<{
             </div>
             <div className="flex flex-wrap items-center justify-between mt-4 pt-4 border-t space-y-2">
                  <div className="flex items-center space-x-2">
-                     <button onClick={handleAddField} disabled={isSending} className="text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 disabled:opacity-50">Amend (Add Field)</button>
-                     <button onClick={handleReset} disabled={isSending} className="text-sm bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 disabled:opacity-50">Reset to Default</button>
+                     <button onClick={handleAddField} className="text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Amend (Add Field)</button>
+                     <button onClick={handleReset} className="text-sm bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600">Reset to Default</button>
                  </div>
-                 <button onClick={handleSendTest} disabled={isSending} className="text-sm bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 disabled:bg-gray-400 flex items-center">
-                    {isSending && <SpinnerIcon />}
-                    {isSending ? 'Sending...' : `Send Test '${title}' Data`}
+                 <button onClick={handleSendTest} className="text-sm bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">
+                    Send Test '{title}' Data
                 </button>
             </div>
         </div>
@@ -147,13 +135,16 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [complaintSheetUrl, setComplaintSheetUrl] = useState('');
   const [updateSheetUrl, setUpdateSheetUrl] = useState('');
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const { technicians: contextTechnicians, addTechnician, updateTechnician, deleteTechnician } = useAppContext();
   const { addToast } = useToast();
 
   useEffect(() => {
     setWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
     setComplaintSheetUrl(localStorage.getItem('complaintSheetUrl') || '');
     setUpdateSheetUrl(localStorage.getItem('updateSheetUrl') || '');
-  }, []);
+    setTechnicians(contextTechnicians);
+  }, [contextTechnicians]);
 
   const handleSaveAndClose = () => {
     // Save Automation Settings
@@ -214,54 +205,13 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
     complaintSheetUrl, setComplaintSheetUrl,
     updateSheetUrl, setUpdateSheetUrl
 }) => {
-   const { checkAutomationStatus } = useAppContext();
-   const { addToast } = useToast(); // Correct hook for addToast
-   const [isChecking, setIsChecking] = useState(false);
+   const { addToast } = useToast();
+   const { webhookStatus, checkWebhookHealth } = useAppContext();
+   const isChecking = webhookStatus === WebhookStatus.Checking;
 
    const handleHealthCheck = useCallback(async () => {
-        if (!webhookUrl) {
-            addToast('Please enter a Master Webhook URL first.', 'error');
-            return;
-        }
-        setIsChecking(true);
-        // Temporarily save the URL to localStorage so the context function can use it for the check
-        localStorage.setItem('masterWebhookUrl', webhookUrl);
-        
-        try {
-            // This global function updates the status indicator on the dashboard
-            await checkAutomationStatus(); 
-            
-            // Re-fetch here to provide immediate feedback on the button click itself
-            const response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'HEALTH_CHECK' }),
-            });
-
-            if (response.ok) {
-                 const data = await response.json();
-                 if (data.status === 'ok') {
-                    addToast('Success! Automation system is online and ready.', 'success');
-                 } else {
-                    throw new Error('Webhook responded, but with an unexpected message.');
-                 }
-            } else {
-                 if (response.status === 404) {
-                    addToast('Connection failed (Error 404). The Webhook URL was not found. Please check for typos.', 'error');
-                } else {
-                    throw new Error(`Webhook responded with status: ${response.status}`);
-                }
-            }
-        } catch (error: any) {
-            console.error('[HEALTH CHECK] Failed:', error);
-            // Avoid showing generic error if a specific one (like 404) was already shown
-            if (!error.message.includes('status')) {
-              addToast('Connection failed. Check URL, internet, and ensure Make.com scenario is ON.', 'error');
-            }
-        } finally {
-            setIsChecking(false);
-        }
-   }, [webhookUrl, addToast, checkAutomationStatus]);
+       await checkWebhookHealth(webhookUrl);
+   }, [webhookUrl, checkWebhookHealth]);
 
    const handleExport = () => {
        const settings = {
@@ -444,7 +394,7 @@ const TechnicianManagement: React.FC = () => {
 
 // Icons
 const SpinnerIcon: React.FC = () => (
-    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>

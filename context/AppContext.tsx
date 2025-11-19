@@ -1,11 +1,8 @@
-
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
-
-type AutomationStatus = 'online' | 'error' | 'unconfigured';
 
 interface AppContextType {
   user: User | null;
@@ -13,8 +10,7 @@ interface AppContextType {
   technicians: Technician[];
   feedback: Feedback[];
   isSyncing: boolean;
-  automationStatus: AutomationStatus;
-  checkAutomationStatus: () => Promise<void>;
+  webhookStatus: WebhookStatus;
   login: (user: User) => void;
   logout: () => void;
   addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
@@ -26,8 +22,9 @@ interface AppContextType {
   deleteTechnician: (techId: string) => void;
   sendReceipt: (ticketId: string) => void;
   resetAllTechnicianPoints: () => void;
-  syncTickets: () => Promise<boolean>; // Return boolean for success/fail
-  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => Promise<boolean>;
+  syncTickets: () => Promise<void>;
+  checkWebhookHealth: (urlOverride?: string) => Promise<void>;
+  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -63,53 +60,125 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [automationStatus, setAutomationStatus] = useState<AutomationStatus>('unconfigured');
+  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const { addToast } = useToast();
 
+  // Effect for loading data from localStorage ONCE on startup, with error handling
   useEffect(() => {
-    const savedTechs = localStorage.getItem('technicians');
-    if (savedTechs) {
-      const parsed = JSON.parse(savedTechs);
-      // Ensure test tech exists
-      if (!parsed.find((t: Technician) => t.id === 'tech-test')) {
-        const updatedTechs = [...parsed, TECHNICIANS.find(t => t.id === 'tech-test')];
-        setTechnicians(updatedTechs);
-        localStorage.setItem('technicians', JSON.stringify(updatedTechs));
-      } else {
-        setTechnicians(parsed);
-      }
-    } else {
-      setTechnicians(TECHNICIANS);
-      localStorage.setItem('technicians', JSON.stringify(TECHNICIANS));
-    }
-
-    const savedTickets = localStorage.getItem('tickets');
-    if (savedTickets && JSON.parse(savedTickets).length > 0) {
-        const parsedTickets = JSON.parse(savedTickets, (key, value) => {
-             if (key === 'createdAt' || key === 'serviceBookingDate' || key === 'completedAt' || key === 'purchaseDate') {
-                return value ? new Date(value) : undefined;
+    try {
+      // Load Technicians
+      const savedTechs = localStorage.getItem('technicians');
+      let initialTechs = TECHNICIANS;
+      if (savedTechs) {
+        const parsedTechs = JSON.parse(savedTechs);
+        if (Array.isArray(parsedTechs)) {
+            // Ensure test tech exists, add if missing
+            if (!parsedTechs.some((t: Technician) => t.id === 'tech-test')) {
+                const testTech = TECHNICIANS.find(t => t.id === 'tech-test');
+                if (testTech) parsedTechs.push(testTech);
             }
-            return value;
+            initialTechs = parsedTechs;
+        }
+      }
+      setTechnicians(initialTechs);
+
+      // Load Tickets
+      const savedTickets = localStorage.getItem('tickets');
+      let initialTickets: Ticket[] = [createDummyTicket()];
+      if (savedTickets) {
+        const parsedTickets = JSON.parse(savedTickets, (key, value) => {
+          if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) {
+            return value ? new Date(value) : undefined;
+          }
+          return value;
         });
-      setTickets(parsedTickets);
-    } else {
-        // SEED with dummy ticket if it's the first run
-        const dummy = createDummyTicket();
-        setTickets([dummy]);
+
+        if (Array.isArray(parsedTickets) && parsedTickets.length > 0) {
+          initialTickets = parsedTickets;
+        }
+      }
+      setTickets(initialTickets);
+
+    } catch (error) {
+      console.error("Failed to parse data from localStorage. Resetting to default state.", error);
+      addToast('App data was corrupted and has been reset.', 'error');
+      
+      // Clear corrupted storage and load defaults
+      localStorage.removeItem('technicians');
+      localStorage.removeItem('tickets');
+      setTechnicians(TECHNICIANS);
+      setTickets([createDummyTicket()]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Effect for saving tickets to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('tickets', JSON.stringify(tickets));
+    if (tickets.length > 0) {
+        localStorage.setItem('tickets', JSON.stringify(tickets));
+    }
   }, [tickets]);
 
-  const checkAutomationStatus = useCallback(async () => {
-    const webhookUrl = localStorage.getItem('masterWebhookUrl');
+  // Effect for saving technicians to localStorage whenever they change
+  useEffect(() => {
+    if (technicians.length > 0) {
+        localStorage.setItem('technicians', JSON.stringify(technicians));
+    }
+  }, [technicians]);
+
+
+  const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
+      const webhookUrl = localStorage.getItem('masterWebhookUrl');
+      const actionName = action.replace(/_/g, ' ').toLowerCase();
+
+      if (webhookUrl) {
+          if (action !== 'HEALTH_CHECK') {
+             setWebhookStatus(WebhookStatus.Checking);
+          }
+          try {
+              const finalPayload = { action, ...payload };
+              const response = await fetch(webhookUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(finalPayload),
+              });
+              if (response.ok) {
+                  setWebhookStatus(WebhookStatus.Connected);
+                  if (action !== 'HEALTH_CHECK') {
+                    console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
+                    addToast(`Automation for "${actionName}" triggered!`, 'success');
+                  }
+              } else {
+                  setWebhookStatus(WebhookStatus.Error);
+                  if (response.status === 410) {
+                      console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
+                      localStorage.removeItem('masterWebhookUrl');
+                      addToast('Webhook URL is invalid (Error 410). It has been cleared. Please paste a new URL from Make.com and save it in Settings.', 'error');
+                  } else {
+                      console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+                      addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
+                  }
+              }
+          } catch (error) {
+              setWebhookStatus(WebhookStatus.Error);
+              console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
+              addToast(`Failed to send webhook for "${actionName}". Check your internet and ensure the Make.com scenario is ON.`, 'error');
+          }
+      } else {
+          setWebhookStatus(WebhookStatus.Simulating);
+          console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
+          addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
+      }
+  };
+  
+  const checkWebhookHealth = async (urlOverride?: string) => {
+    const webhookUrl = urlOverride ?? localStorage.getItem('masterWebhookUrl');
     if (!webhookUrl) {
-      setAutomationStatus('unconfigured');
+      addToast('Please enter a Master Webhook URL first.', 'error');
+      setWebhookStatus(WebhookStatus.Simulating);
       return;
     }
-
+    setWebhookStatus(WebhookStatus.Checking);
     try {
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -119,70 +188,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'ok') {
-          setAutomationStatus('online');
+          addToast('Success! Automation system is online and ready.', 'success');
+          setWebhookStatus(WebhookStatus.Connected);
         } else {
-          setAutomationStatus('error');
+          throw new Error('Webhook responded, but with an unexpected message.');
         }
       } else {
-        setAutomationStatus('error');
+        throw new Error(`Webhook responded with status: ${response.status}`);
       }
     } catch (error) {
-      setAutomationStatus('error');
+      console.error('[HEALTH CHECK] Failed:', error);
+      addToast('Connection failed. Check URL and ensure Make.com scenario is ON.', 'error');
+      setWebhookStatus(WebhookStatus.Error);
     }
-  }, []);
-
-
-  const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
-      const webhookUrl = localStorage.getItem('masterWebhookUrl');
-      const actionName = action.replace(/_/g, ' ').toLowerCase();
-
-      if (webhookUrl) {
-          const finalPayload = { action, ...payload };
-          try {
-              const response = await fetch(webhookUrl, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(finalPayload),
-              });
-              if (response.ok) {
-                  // Don't show toast for health check success, the UI handles it
-                  if (action !== 'HEALTH_CHECK') {
-                    console.log(`[AUTOMATION] Successfully sent data for action: ${action}`);
-                    addToast(`Automation for "${actionName}" triggered!`, 'success');
-                  }
-                  return await response.json(); // Return the body for confirmation
-              } else {
-                  if (response.status === 410) {
-                      console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
-                      localStorage.removeItem('masterWebhookUrl');
-                      addToast('Webhook URL is invalid (Error 410). It has been cleared. Please paste a new URL from Make.com and save it in Settings.', 'error');
-                      setAutomationStatus('error');
-                  } else {
-                      console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
-                      addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
-                  }
-              }
-          } catch (error) {
-              console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-              addToast(`Failed to send webhook for "${actionName}". Check your internet and ensure the Make.com scenario is ON.`, 'error');
-          }
-      } else {
-          console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
-          if (action !== 'HEALTH_CHECK') {
-            addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
-          }
-      }
-      return null;
   };
 
-  const sendCustomWebhookPayload = async (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>): Promise<boolean> => {
-     const response = await sendWebhook(
+  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => {
+     sendWebhook(
         action,
         { data: payload },
         `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
     );
-    // For test payloads, we now wait for a specific success message from the webhook response
-    return response?.status === 'success';
   };
 
   const login = (loggedInUser: User) => setUser(loggedInUser);
@@ -191,23 +217,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const syncTickets = async (): Promise<boolean> => {
-    if (!user) return false;
+  const syncTickets = async () => {
+    if (!user) return;
     const webhookUrl = localStorage.getItem('masterWebhookUrl');
     if (!webhookUrl) {
       addToast('Webhook URL not configured in settings.', 'error');
-      setAutomationStatus('unconfigured');
-      return false;
+      setWebhookStatus(WebhookStatus.Simulating);
+      return;
     }
 
     setIsSyncing(true);
+    setWebhookStatus(WebhookStatus.Checking);
     try {
       const payload = {
-        action: 'GET_TICKETS',
+        action: 'FETCH_LATEST_JOBS', // CHANGED: Renamed to distinct action to avoid router conflicts
         role: user.role,
-        technicianId: user.role === UserRole.Technician ? user.id : undefined,
+        technicianId: user.role === UserRole.Technician ? user.id : "", // Ensure empty string if undefined to keep key in JSON
       };
       
+      console.log('[SYNC] Sending payload:', payload);
+
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -215,19 +244,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       if (!response.ok) {
+        setWebhookStatus(WebhookStatus.Error);
         if (response.status === 410) {
             console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
             localStorage.removeItem('masterWebhookUrl');
             addToast('Webhook URL is invalid (Error 410). It has been cleared. Please get a new URL from Make.com and save it in Settings.', 'error');
-            setAutomationStatus('error');
         } else {
-            setAutomationStatus('error');
             throw new Error(`Sync failed with status: ${response.status}`);
         }
-        return false;
+        return;
       }
-      
-      setAutomationStatus('online');
+
       const data = await response.json();
       
       if (data.tickets && Array.isArray(data.tickets)) {
@@ -278,17 +305,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
 
           setTickets(syncedTickets);
+          setWebhookStatus(WebhookStatus.Connected);
           addToast('Jobs synced successfully!', 'success');
-          return true;
       } else {
+           setWebhookStatus(WebhookStatus.Error);
            throw new Error('Invalid data format received from webhook.');
       }
 
     } catch (error) {
+      setWebhookStatus(WebhookStatus.Error);
       console.error('[SYNC] Error syncing tickets:', error);
       addToast('Sync failed. Check your internet and ensure the Make.com scenario is ON.', 'error');
-      setAutomationStatus('error');
-      return false;
     } finally {
       setIsSyncing(false);
     }
@@ -357,7 +384,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return t;
             });
             setTechnicians(updatedTechs);
-            localStorage.setItem('technicians', JSON.stringify(updatedTechs));
             updatedTicket.pointsAwarded = true; 
             setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
         }
@@ -432,21 +458,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const newTech = { ...tech, id: `tech${Date.now()}`, points: 0 };
       const updatedTechs = [...technicians, newTech];
       setTechnicians(updatedTechs);
-      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
       addToast('Technician added successfully!', 'success');
   }
 
   const updateTechnician = (updatedTech: Technician) => {
       const updatedTechs = technicians.map(t => t.id === updatedTech.id ? updatedTech : t);
       setTechnicians(updatedTechs);
-      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
       addToast('Technician updated successfully!', 'success');
   }
 
   const deleteTechnician = (techId: string) => {
       const updatedTechs = technicians.filter(t => t.id !== techId);
       setTechnicians(updatedTechs);
-      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
       addToast('Technician removed successfully!', 'success');
   }
 
@@ -470,13 +493,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (window.confirm('Are you sure you want to reset all technician points to zero? This action cannot be undone.')) {
         const resetTechs = technicians.map(t => ({...t, points: 0}));
         setTechnicians(resetTechs);
-        localStorage.setItem('technicians', JSON.stringify(resetTechs));
         addToast('All technician points have been reset to 0.', 'success');
     }
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, sendCustomWebhookPayload, automationStatus, checkAutomationStatus };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload };
 
   return (
     <AppContext.Provider value={contextValue}>
