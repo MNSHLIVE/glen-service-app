@@ -1,8 +1,10 @@
+
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
+import { APP_CONFIG } from '../config'; // Import the new config
 
 interface AppContextType {
   user: User | null;
@@ -62,10 +64,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSyncing, setIsSyncing] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const { addToast } = useToast();
+  
+  // Define finalPayload variable for sendWebhook usage
+  let finalPayload: any;
 
   // Effect for loading data from localStorage ONCE on startup, with error handling
   useEffect(() => {
     try {
+      // --- CONFIGURATION PERSISTENCE CHECK ---
+      // If config.ts has values, force them into localStorage so they stick
+      if (APP_CONFIG.MASTER_WEBHOOK_URL) {
+          localStorage.setItem('masterWebhookUrl', APP_CONFIG.MASTER_WEBHOOK_URL);
+      }
+      if (APP_CONFIG.COMPLAINT_SHEET_URL) {
+          localStorage.setItem('complaintSheetUrl', APP_CONFIG.COMPLAINT_SHEET_URL);
+      }
+      if (APP_CONFIG.UPDATE_SHEET_URL) {
+          localStorage.setItem('updateSheetUrl', APP_CONFIG.UPDATE_SHEET_URL);
+      }
+
       // Load Technicians
       const savedTechs = localStorage.getItem('technicians');
       let initialTechs = TECHNICIANS;
@@ -98,6 +115,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }
       setTickets(initialTickets);
+
+      // Initial Webhook Status Check
+      const storedUrl = localStorage.getItem('masterWebhookUrl');
+      if (storedUrl) {
+        setWebhookStatus(WebhookStatus.Checking);
+        // We don't run a full fetch here to avoid lag, just set state
+        // The user can trigger a test from settings
+      } else {
+        setWebhookStatus(WebhookStatus.Simulating);
+      }
 
     } catch (error) {
       console.error("Failed to parse data from localStorage. Resetting to default state.", error);
@@ -136,7 +163,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              setWebhookStatus(WebhookStatus.Checking);
           }
           try {
-              const finalPayload = { action, ...payload };
+              finalPayload = { action, ...payload };
               const response = await fetch(webhookUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -150,19 +177,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               } else {
                   setWebhookStatus(WebhookStatus.Error);
-                  if (response.status === 410) {
-                      console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
-                      localStorage.removeItem('masterWebhookUrl');
-                      addToast('Webhook URL is invalid (Error 410). It has been cleared. Please paste a new URL from Make.com and save it in Settings.', 'error');
-                  } else {
-                      console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
-                      addToast(`Webhook error for "${actionName}". Status: ${response.status}`, 'error');
-                  }
+                  // REMOVED: We no longer delete the URL on error. User must check it manually.
+                  console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+                  addToast(`Webhook error: ${response.status}. Check Make.com scenario is ON.`, 'error');
               }
           } catch (error) {
               setWebhookStatus(WebhookStatus.Error);
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-              addToast(`Failed to send webhook for "${actionName}". Check your internet and ensure the Make.com scenario is ON.`, 'error');
+              addToast(`Failed to send webhook. Ensure Make.com scenario is ON.`, 'error');
           }
       } else {
           setWebhookStatus(WebhookStatus.Simulating);
@@ -185,28 +207,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'HEALTH_CHECK' }),
       });
+
+      const responseText = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("[HEALTH CHECK] Response was not JSON:", responseText);
+        throw new Error(`Make.com returned text "${responseText}" instead of JSON. Add a 'Webhook Response' module to Path 4.`);
+      }
+
       if (response.ok) {
-        const data = await response.json();
         if (data.status === 'ok') {
           addToast('Success! Automation system is online and ready.', 'success');
           setWebhookStatus(WebhookStatus.Connected);
         } else {
-          throw new Error('Webhook responded, but with an unexpected message.');
+          throw new Error(`Webhook responded, but status was not 'ok'. Got: ${JSON.stringify(data)}`);
         }
       } else {
         throw new Error(`Webhook responded with status: ${response.status}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[HEALTH CHECK] Failed:', error);
-      addToast('Connection failed. Check URL and ensure Make.com scenario is ON.', 'error');
+      addToast(error.message || 'Connection failed. Ensure Scenario is ON in Make.com.', 'error');
       setWebhookStatus(WebhookStatus.Error);
     }
   };
 
   const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED', payload: Record<string, any>) => {
+     // UPDATED: Sent directly, not wrapped in { data: ... }
      sendWebhook(
         action,
-        { data: payload },
+        payload,
         `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
     );
   };
@@ -228,11 +261,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setIsSyncing(true);
     setWebhookStatus(WebhookStatus.Checking);
+    addToast('Syncing... Action: FETCH_LATEST_JOBS', 'success');
+
     try {
       const payload = {
-        action: 'FETCH_LATEST_JOBS', // CHANGED: Renamed to distinct action to avoid router conflicts
+        action: 'FETCH_LATEST_JOBS', // Ensures compatibility with Make.com router
         role: user.role,
-        technicianId: user.role === UserRole.Technician ? user.id : "", // Ensure empty string if undefined to keep key in JSON
+        technicianId: user.role === UserRole.Technician ? user.id : "", 
       };
       
       console.log('[SYNC] Sending payload:', payload);
@@ -245,20 +280,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (!response.ok) {
         setWebhookStatus(WebhookStatus.Error);
-        if (response.status === 410) {
-            console.error('[AUTOMATION] Webhook URL is gone (410). Clearing from storage.');
-            localStorage.removeItem('masterWebhookUrl');
-            addToast('Webhook URL is invalid (Error 410). It has been cleared. Please get a new URL from Make.com and save it in Settings.', 'error');
-        } else {
-            throw new Error(`Sync failed with status: ${response.status}`);
-        }
-        return;
+        throw new Error(`Sync failed with status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
       
-      if (data.tickets && Array.isArray(data.tickets)) {
-          const syncedTickets: Ticket[] = data.tickets.map((row: any) => {
+      try {
+          data = JSON.parse(responseText);
+      } catch (e) {
+          console.error("[SYNC] Response was not JSON:", responseText);
+          throw new Error(`Make.com returned "${responseText}" instead of tickets JSON. Add a 'Webhook Response' module to Path 3.`);
+      }
+
+      // Handle two possible formats:
+      // 1. Standard: { "tickets": [...] }
+      // 2. Raw Array: [...] (If user forgets to wrap in Make.com)
+      let ticketsArray: any[] = [];
+      
+      if (Array.isArray(data)) {
+          ticketsArray = data;
+      } else if (data.tickets && Array.isArray(data.tickets)) {
+          ticketsArray = data.tickets;
+      } else {
+          setWebhookStatus(WebhookStatus.Error);
+          throw new Error('Invalid data format. Expected { "tickets": [...] } or an Array.');
+      }
+
+      if (ticketsArray) {
+          const syncedTickets: Ticket[] = ticketsArray.map((row: any) => {
             const partsReplacedString = row['Parts Replaced (Name | Price | Warranty)'] || '';
             const parts: ReplacedPart[] = partsReplacedString.split(', ').filter(Boolean).map((partStr: string) => {
               const [name, price, warrantyDuration] = partStr.split(' | ');
@@ -306,16 +356,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           setTickets(syncedTickets);
           setWebhookStatus(WebhookStatus.Connected);
-          addToast('Jobs synced successfully!', 'success');
-      } else {
-           setWebhookStatus(WebhookStatus.Error);
-           throw new Error('Invalid data format received from webhook.');
+          addToast(`Synced ${syncedTickets.length} jobs successfully!`, 'success');
       }
 
-    } catch (error) {
+    } catch (error: any) {
       setWebhookStatus(WebhookStatus.Error);
       console.error('[SYNC] Error syncing tickets:', error);
-      addToast('Sync failed. Check your internet and ensure the Make.com scenario is ON.', 'error');
+      addToast(error.message || 'Sync failed. Check Make.com scenario is ON.', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -334,8 +381,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const flatPayload = {
       [COMPLAINT_SHEET_HEADERS[0]]: newTicket.id,
-      [COMPLAINT_SHEET_HEADERS[1]]: newTicket.createdAt.toISOString(),
-      [COMPLAINT_SHEET_HEADERS[2]]: newTicket.serviceBookingDate.toISOString(),
+      [COMPLAINT_SHEET_HEADERS[1]]: newTicket.createdAt.toLocaleString(), // Changed to Locale String for better readability in sheets
+      [COMPLAINT_SHEET_HEADERS[2]]: newTicket.serviceBookingDate.toLocaleString(),
       [COMPLAINT_SHEET_HEADERS[3]]: newTicket.preferredTime,
       [COMPLAINT_SHEET_HEADERS[4]]: newTicket.customerName,
       [COMPLAINT_SHEET_HEADERS[5]]: newTicket.phone,
@@ -346,9 +393,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       [COMPLAINT_SHEET_HEADERS[10]]: newTicket.status,
     };
 
+    // UPDATED: Sent directly, not wrapped in { data: ... }
     sendWebhook(
         'NEW_TICKET', 
-        { data: flatPayload },
+        flatPayload,
         `[AUTOMATION] Trigger: New Ticket Created. (Master Webhook not configured)`
     );
   };
@@ -390,15 +438,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         const flatJobCompletedPayload = {
             [TECHNICIAN_UPDATE_HEADERS[0]]: updatedTicket.id,
-            [TECHNICIAN_UPDATE_HEADERS[1]]: updatedTicket.createdAt.toISOString(),
-            [TECHNICIAN_UPDATE_HEADERS[2]]: updatedTicket.serviceBookingDate.toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[1]]: updatedTicket.createdAt.toLocaleString(),
+            [TECHNICIAN_UPDATE_HEADERS[2]]: updatedTicket.serviceBookingDate.toLocaleString(),
             [TECHNICIAN_UPDATE_HEADERS[3]]: updatedTicket.preferredTime,
             [TECHNICIAN_UPDATE_HEADERS[4]]: updatedTicket.customerName,
             [TECHNICIAN_UPDATE_HEADERS[5]]: updatedTicket.phone,
             [TECHNICIAN_UPDATE_HEADERS[6]]: updatedTicket.address,
             [TECHNICIAN_UPDATE_HEADERS[7]]: updatedTicket.serviceCategory,
             [TECHNICIAN_UPDATE_HEADERS[8]]: updatedTicket.complaint,
-            [TECHNICIAN_UPDATE_HEADERS[9]]: (updatedTicket.completedAt || new Date()).toISOString(),
+            [TECHNICIAN_UPDATE_HEADERS[9]]: (updatedTicket.completedAt || new Date()).toLocaleString(),
             [TECHNICIAN_UPDATE_HEADERS[10]]: technician?.name || 'Unassigned',
             [TECHNICIAN_UPDATE_HEADERS[11]]: updatedTicket.workDone || '',
             [TECHNICIAN_UPDATE_HEADERS[12]]: updatedTicket.amountCollected || 0,
@@ -409,9 +457,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             [TECHNICIAN_UPDATE_HEADERS[17]]: updatedTicket.freeService || false,
         };
 
+        // UPDATED: Sent directly, not wrapped in { data: ... }
         sendWebhook(
             'JOB_COMPLETED',
-            { data: flatJobCompletedPayload },
+            flatJobCompletedPayload,
             `[AUTOMATION] Trigger: Job Completed. (Master Webhook not configured)`
         );
     }
