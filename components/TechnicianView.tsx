@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Ticket, TicketStatus } from '../types';
 import JobCard from './JobCard';
@@ -9,7 +9,7 @@ interface TechnicianViewProps {
 }
 
 const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
-  const { user, tickets, logout, technicians, syncTickets, isSyncing } = useAppContext();
+  const { user, tickets, logout, technicians, syncTickets, isSyncing, lastSyncTime } = useAppContext();
   const [filter, setFilter] = useState<TicketStatus | 'All'>('All');
 
   const currentTechnician = technicians.find(t => t.id === user?.id);
@@ -20,18 +20,41 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
     `px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
       filter === f ? 'bg-glen-blue text-white' : 'bg-gray-200 text-gray-700'
     }`;
+    
+  // AUTO-SYNC LOGIC:
+  // 1. Fetch immediately when the Technician logs in.
+  // 2. Set up an interval to fetch silently every 60 seconds.
+  useEffect(() => {
+      // Initial fetch (silent)
+      syncTickets(true);
+
+      // Poll every 60 seconds (silent)
+      const intervalId = setInterval(() => {
+          syncTickets(true);
+      }, 60000);
+
+      return () => clearInterval(intervalId);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Welcome, {user?.name}!</h2>
-          <p className="text-sm text-gray-500">Your Assigned Jobs</p>
+          <div className="flex items-center space-x-2">
+              <p className="text-sm text-gray-500">Your Assigned Jobs</p>
+              {lastSyncTime && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                      Updated: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+              )}
+          </div>
         </div>
         <div className="flex items-center space-x-2">
-           <button onClick={() => syncTickets()} disabled={isSyncing} className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 flex items-center space-x-2">
+           {/* Button is now smaller/icon-only as it is secondary. Main sync is automatic. */}
+           <button onClick={() => syncTickets(false)} disabled={isSyncing} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50" title="Fetch New Jobs">
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
-                <span>{isSyncing ? 'Syncing...' : 'Fetch New Jobs'}</span>
             </button>
             <button onClick={logout} className="text-sm bg-glen-red text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
               Logout
@@ -62,7 +85,8 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
         </div>
       ) : (
         <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-500">
-          <p>No jobs found. Try pressing "Fetch New Jobs".</p>
+          <p>No jobs found.</p>
+          <p className="text-xs mt-2 text-gray-400">The list updates automatically.</p>
         </div>
       )}
     </div>
@@ -75,7 +99,7 @@ const RefreshIcon: React.FC = () => (
     </svg>
 );
 const SpinnerIcon: React.FC = () => (
-    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>

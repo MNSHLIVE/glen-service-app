@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AddTicketModal from './AddTicketModal';
 import ViewJobs from './ViewJobs';
@@ -48,13 +48,24 @@ const WebhookStatusIndicator: React.FC = () => {
 
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
-  const { user, logout, syncTickets, isSyncing } = useAppContext();
+  const { user, logout, syncTickets, isSyncing, lastSyncTime } = useAppContext();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isIntelligentModalOpen, setIsIntelligentModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // State for settings modal
   const [intelligentMode, setIntelligentMode] = useState<'text' | 'image'>('text');
   const [parsedTicketData, setParsedTicketData] = useState<Partial<Ticket> | null>(null);
   const [activeView, setActiveView] = useState<AdminView>('jobs');
+
+  // AUTO-SYNC LOGIC for Admin:
+  // Fetch immediately on mount, then poll every 60 seconds.
+  useEffect(() => {
+      syncTickets(true); // Silent fetch
+      const intervalId = setInterval(() => {
+          syncTickets(true);
+      }, 60000);
+      return () => clearInterval(intervalId);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOpenIntelligentModal = (mode: 'text' | 'image') => {
     setIntelligentMode(mode);
@@ -84,11 +95,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
       <div className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Welcome, {user?.name}!</h2>
-          <p className="text-sm text-gray-500">Admin Dashboard</p>
+          <div className="flex items-center space-x-2">
+              <p className="text-sm text-gray-500">Admin Dashboard</p>
+              {lastSyncTime && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                      Updated: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+              )}
+          </div>
         </div>
         <div className="flex items-center space-x-3">
             <WebhookStatusIndicator />
-            <button onClick={() => syncTickets()} disabled={isSyncing} title="Fetch Latest Jobs" className="text-sm bg-blue-500 text-white font-semibold p-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
+            <button onClick={() => syncTickets()} disabled={isSyncing} title="Fetch New Jobs" className="text-sm bg-blue-500 text-white font-semibold p-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
             <button onClick={() => setIsSettingsModalOpen(true)} className="text-sm bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors">

@@ -13,6 +13,7 @@ interface AppContextType {
   feedback: Feedback[];
   isSyncing: boolean;
   webhookStatus: WebhookStatus;
+  lastSyncTime: Date | null;
   login: (user: User) => void;
   logout: () => void;
   addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
@@ -63,6 +64,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const { addToast } = useToast();
   
   // Define finalPayload variable for sendWebhook usage
@@ -166,7 +168,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               finalPayload = { action, ...payload };
               const response = await fetch(webhookUrl, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 
+                      'Content-Type': 'application/json',
+                      'X-App-Source': 'Pandit-Glen-App-Secure' // Simple security header to identify legitimate requests
+                  },
                   body: JSON.stringify(finalPayload),
               });
               if (response.ok) {
@@ -204,7 +209,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-App-Source': 'Pandit-Glen-App-Secure'
+        },
         body: JSON.stringify({ action: 'HEALTH_CHECK' }),
       });
 
@@ -270,12 +278,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!isBackground) {
         setWebhookStatus(WebhookStatus.Checking);
         // Explicitly telling the user what action is being sent
-        addToast('Syncing... Action: FETCH_JOBS', 'success');
+        addToast('Syncing... (Sending: FETCH_NEW_JOBS)', 'success');
     }
 
     try {
       const payload = {
-        action: 'FETCH_JOBS', // CHANGED TO 'FETCH_JOBS' - Simple, hard to misspell
+        action: 'FETCH_NEW_JOBS', // STANDARDIZED to "FETCH_NEW_JOBS"
         role: user.role,
         technicianId: user.role === UserRole.Technician ? user.id : "", 
       };
@@ -284,7 +292,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-App-Source': 'Pandit-Glen-App-Secure'
+        },
         body: JSON.stringify(payload)
       });
 
@@ -297,7 +308,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       // CRITICAL FIX: Check for "Accepted" text which means user forgot the response module
       if (responseText.includes('Accepted') && responseText.length < 50) {
-         throw new Error("Make.com accepted the command but sent no data back. Add a 'Webhook Response' module to Path 3 with Body: {\"tickets\": ...}");
+         throw new Error("Make.com accepted command but sent no data. Add Webhook Response to Path 3.");
       }
 
       let data;
@@ -372,6 +383,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           setTickets(syncedTickets);
           setWebhookStatus(WebhookStatus.Connected);
+          setLastSyncTime(new Date()); // UPDATE LAST SYNC TIME
           if (!isBackground) {
               addToast(`Synced ${syncedTickets.length} jobs successfully!`, 'success');
           }
@@ -567,7 +579,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, sendReceipt, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime };
 
   return (
     <AppContext.Provider value={contextValue}>
