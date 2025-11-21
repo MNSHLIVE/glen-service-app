@@ -305,6 +305,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const responseText = await response.text();
+      console.log('[SYNC DEBUG] Raw Response from Make.com:', responseText);
       
       // CRITICAL FIX: Check for "Accepted" text which means user forgot the response module
       if (responseText.includes('Accepted') && responseText.length < 50) {
