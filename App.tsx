@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from './context/AppContext';
 import LoginScreen from './components/LoginScreen';
@@ -6,6 +7,7 @@ import TechnicianView from './components/TechnicianView';
 import TicketDetails from './components/Reports'; // Reports.tsx is repurposed as TicketDetails
 import { UserRole } from './types';
 import ToastContainer from './components/Toast';
+import InstallPrompt from './components/InstallPrompt';
 
 const Logo: React.FC = () => (
   <div className="flex items-center space-x-2">
@@ -42,7 +44,7 @@ const App: React.FC = () => {
       return <TicketDetails ticketId={viewingTicketId} onBack={handleBackToList} />;
     }
     
-    if (user.role === UserRole.Admin || user.role === UserRole.Controller) {
+    if (user.role === UserRole.Admin || user.role === UserRole.Controller || user.role === UserRole.Developer || user.role === UserRole.Coordinator) {
       return <AdminDashboard onViewTicket={handleViewTicket} />;
     }
     
@@ -54,14 +56,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen font-sans">
+    <div className="min-h-screen font-sans flex flex-col">
       <ToastContainer />
+      <InstallPrompt />
+      {/* Header: Sticky with safe-area padding support via standard css */}
       <header className="bg-white/70 backdrop-blur-sm shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <Logo />
         </div>
       </header>
-      <main className="max-w-4xl mx-auto p-4">
+      {/* Main content: Flex grow to fill space, with padding for mobile */}
+      <main className="flex-grow max-w-4xl mx-auto w-full p-4 pb-24 sm:pb-4">
         {renderContent()}
       </main>
     </div>

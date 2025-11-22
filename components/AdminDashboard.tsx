@@ -5,9 +5,9 @@ import AddTicketModal from './AddTicketModal';
 import ViewJobs from './ViewJobs';
 import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
-import SettingsModal from './SettingsModal'; // Import SettingsModal
-import PerformanceView from './PerformanceView'; // Import the new PerformanceView
-import { Ticket, WebhookStatus } from '../types';
+import SettingsModal from './SettingsModal';
+import PerformanceView from './PerformanceView';
+import { Ticket, WebhookStatus, UserRole } from '../types';
 
 interface AdminDashboardProps {
     onViewTicket: (ticketId: string) => void;
@@ -51,15 +51,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
   const { user, logout, syncTickets, isSyncing, lastSyncTime } = useAppContext();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isIntelligentModalOpen, setIsIntelligentModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // State for settings modal
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [intelligentMode, setIntelligentMode] = useState<'text' | 'image'>('text');
   const [parsedTicketData, setParsedTicketData] = useState<Partial<Ticket> | null>(null);
   const [activeView, setActiveView] = useState<AdminView>('jobs');
 
-  // AUTO-SYNC LOGIC for Admin:
-  // Fetch immediately on mount, then poll every 60 seconds.
+  const isDeveloper = user?.role === UserRole.Developer;
+
+  // AUTO-SYNC
   useEffect(() => {
-      syncTickets(true); // Silent fetch
+      syncTickets(true);
       const intervalId = setInterval(() => {
           syncTickets(true);
       }, 60000);
@@ -75,12 +76,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
   const handleParsedData = (data: Partial<Ticket>) => {
     setParsedTicketData(data);
     setIsIntelligentModalOpen(false);
-    setIsManualModalOpen(true); // Open the manual modal with pre-filled data
+    setIsManualModalOpen(true);
   };
   
   const handleCloseManualModal = () => {
       setIsManualModalOpen(false);
-      setParsedTicketData(null); // Clear data when closing
+      setParsedTicketData(null);
   }
 
   const navButtonClasses = (view: AdminView) =>
@@ -96,7 +97,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
         <div>
           <h2 className="text-xl font-bold text-gray-800">Welcome, {user?.name}!</h2>
           <div className="flex items-center space-x-2">
-              <p className="text-sm text-gray-500">Admin Dashboard</p>
+              <p className="text-sm text-gray-500">
+                  {isDeveloper ? 'Developer Mode' : 'Admin Dashboard'}
+              </p>
               {lastSyncTime && (
                   <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                       Updated: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -109,9 +112,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
             <button onClick={() => syncTickets()} disabled={isSyncing} title="Fetch New Jobs" className="text-sm bg-blue-500 text-white font-semibold p-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
-            <button onClick={() => setIsSettingsModalOpen(true)} className="text-sm bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors">
-                <SettingsIcon />
-            </button>
+            
+            {/* Only Developer sees Settings */}
+            {isDeveloper && (
+                <button onClick={() => setIsSettingsModalOpen(true)} className="text-sm bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Settings">
+                    <SettingsIcon />
+                </button>
+            )}
+
             <button onClick={logout} className="text-sm bg-glen-red text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
               Logout
             </button>

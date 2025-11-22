@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Technician, WebhookStatus } from '../types';
+import { Technician, WebhookStatus, UserRole } from '../types';
 import { useToast } from '../context/ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
 
@@ -9,7 +10,7 @@ type SettingsTab = 'automation' | 'technicians';
 // --- Reusable Payload Manager Component ---
 const PayloadManager: React.FC<{
     title: string;
-    action: 'NEW_TICKET' | 'JOB_COMPLETED';
+    action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE';
     defaultHeaders: string[];
 }> = ({ title, action, defaultHeaders }) => {
     const { sendCustomWebhookPayload } = useAppContext();
@@ -23,7 +24,7 @@ const PayloadManager: React.FC<{
             'Created At': now.toISOString(),
             'Customer Name': 'Test Customer',
             'Phone': '9876543210',
-            'Address': '123 Test Street, Make.com City',
+            'Address': '123 Test Street, Automation City',
             'Service Category': 'Chimney',
             'Complaint': 'Test complaint for automation setup.',
             'Assigned Technician': 'Test Technician',
@@ -45,6 +46,16 @@ const PayloadManager: React.FC<{
                 'AMC Discussion': true,
                 'Free Service': false,
             });
+        }
+
+        if (action === 'ATTENDANCE') {
+             return [
+                 { id: 1, key: 'technicianId', value: 'tech-test' },
+                 { id: 2, key: 'technicianName', value: 'Test Technician' },
+                 { id: 3, key: 'status', value: 'Clock In' },
+                 { id: 4, key: 'timestamp', value: now.toLocaleString() },
+                 { id: 5, key: 'timestampISO', value: now.toISOString() },
+             ];
         }
         
         const finalPayload = defaultHeaders.map((header) => {
@@ -131,30 +142,30 @@ const PayloadManager: React.FC<{
 
 const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('automation');
-  // State is lifted up to be controlled by the single Save button in the footer
   const [webhookUrl, setWebhookUrl] = useState('');
-  const [complaintSheetUrl, setComplaintSheetUrl] = useState('');
-  const [updateSheetUrl, setUpdateSheetUrl] = useState('');
+  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const { technicians: contextTechnicians, addTechnician, updateTechnician, deleteTechnician } = useAppContext();
+  const { technicians: contextTechnicians, addTechnician, updateTechnician, deleteTechnician, user, webhookStatus, checkWebhookHealth } = useAppContext();
   const { addToast } = useToast();
+
+  const isDeveloper = user?.role === UserRole.Developer;
 
   useEffect(() => {
     setWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
-    setComplaintSheetUrl(localStorage.getItem('complaintSheetUrl') || '');
-    setUpdateSheetUrl(localStorage.getItem('updateSheetUrl') || '');
+    setGoogleSheetUrl(localStorage.getItem('googleSheetUrl') || '');
     setTechnicians(contextTechnicians);
-  }, [contextTechnicians]);
+    
+    // Default to technicians tab if not developer
+    if (!isDeveloper) {
+        setActiveTab('technicians');
+    }
+  }, [contextTechnicians, isDeveloper]);
 
   const handleSaveAndClose = () => {
-    // Save Automation Settings
-    localStorage.setItem('masterWebhookUrl', webhookUrl);
-    localStorage.setItem('complaintSheetUrl', complaintSheetUrl);
-    localStorage.setItem('updateSheetUrl', updateSheetUrl);
-
-    // This modal doesn't directly manage technicians anymore, but if it did, save logic would be here.
-    // The TechnicianManagement component now calls context functions directly.
-    
+    if (isDeveloper) {
+        localStorage.setItem('masterWebhookUrl', webhookUrl);
+        localStorage.setItem('googleSheetUrl', googleSheetUrl);
+    }
     addToast('Settings saved successfully!', 'success');
     onClose();
   };
@@ -169,16 +180,17 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
             <div className="mt-4">
                 <div className="flex border-b">
-                    <button onClick={() => setActiveTab('automation')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'automation' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Automation</button>
+                    {isDeveloper && (
+                        <button onClick={() => setActiveTab('automation')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'automation' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Automation (Dev)</button>
+                    )}
                     <button onClick={() => setActiveTab('technicians')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'technicians' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Technicians</button>
                 </div>
             </div>
         </div>
         <div className="p-6 overflow-y-auto flex-grow">
-            {activeTab === 'automation' && <AutomationSettings 
+            {activeTab === 'automation' && isDeveloper && <AutomationSettings 
                 webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
-                complaintSheetUrl={complaintSheetUrl} setComplaintSheetUrl={setComplaintSheetUrl}
-                updateSheetUrl={updateSheetUrl} setUpdateSheetUrl={setUpdateSheetUrl}
+                googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl}
              />}
             {activeTab === 'technicians' && <TechnicianManagement />}
         </div>
@@ -194,16 +206,13 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 interface AutomationSettingsProps {
     webhookUrl: string;
     setWebhookUrl: (url: string) => void;
-    complaintSheetUrl: string;
-    setComplaintSheetUrl: (url: string) => void;
-    updateSheetUrl: string;
-    setUpdateSheetUrl: (url: string) => void;
+    googleSheetUrl: string;
+    setGoogleSheetUrl: (url: string) => void;
 }
 
 const AutomationSettings: React.FC<AutomationSettingsProps> = ({ 
     webhookUrl, setWebhookUrl,
-    complaintSheetUrl, setComplaintSheetUrl,
-    updateSheetUrl, setUpdateSheetUrl
+    googleSheetUrl, setGoogleSheetUrl
 }) => {
    const { addToast } = useToast();
    const { webhookStatus, checkWebhookHealth } = useAppContext();
@@ -216,8 +225,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
    const handleExport = () => {
        const settings = {
            masterWebhookUrl: webhookUrl,
-           complaintSheetUrl: complaintSheetUrl,
-           updateSheetUrl: updateSheetUrl,
+           googleSheetUrl: googleSheetUrl,
        };
        const settingsString = JSON.stringify(settings, null, 2);
        navigator.clipboard.writeText(settingsString)
@@ -236,12 +244,10 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
            try {
                const parsedSettings = JSON.parse(pastedSettings);
                if (parsedSettings.masterWebhookUrl !== undefined && 
-                   parsedSettings.complaintSheetUrl !== undefined && 
-                   parsedSettings.updateSheetUrl !== undefined) {
+                   parsedSettings.googleSheetUrl !== undefined) {
                    
                    setWebhookUrl(parsedSettings.masterWebhookUrl);
-                   setComplaintSheetUrl(parsedSettings.complaintSheetUrl);
-                   setUpdateSheetUrl(parsedSettings.updateSheetUrl);
+                   setGoogleSheetUrl(parsedSettings.googleSheetUrl);
                    addToast('Settings imported successfully!', 'success');
                } else {
                    throw new Error("Missing required keys in settings object.");
@@ -265,13 +271,13 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
         </div>
          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Master Webhook URL</label>
+              <label className="block text-sm font-medium text-gray-700">Master Webhook URL (n8n/Make)</label>
               <div className="flex items-center space-x-2">
                  <input
                       type="url"
                       value={webhookUrl}
                       onChange={(e) => setWebhookUrl(e.target.value)}
-                      placeholder="https://hook.make.com/..."
+                      placeholder="https://n8n.your-domain.com/webhook/..."
                       className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue disabled:bg-gray-100"
                       disabled={isChecking}
                   />
@@ -282,24 +288,15 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Complaint Sheet URL (Sheet 1)</label>
+              <label className="block text-sm font-medium text-gray-700">Master Google Sheet URL</label>
               <input
                   type="url"
-                  value={complaintSheetUrl}
-                  onChange={(e) => setComplaintSheetUrl(e.target.value)}
+                  value={googleSheetUrl}
+                  onChange={(e) => setGoogleSheetUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Technician Update Sheet URL (Sheet 2)</label>
-              <input
-                  type="url"
-                  value={updateSheetUrl}
-                  onChange={(e) => setUpdateSheetUrl(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
-              />
+              <p className="text-xs text-gray-500 mt-1">Ensure this sheet has 'Complaints' and 'Updates' tabs.</p>
             </div>
         </div>
       </div>
@@ -309,15 +306,16 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
         <div className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
             <p className="font-bold text-blue-800">Instructions:</p>
             <ol className="list-decimal list-inside mt-1 space-y-1">
-                <li>Put your Make.com scenario in "Run once" (listening) mode.</li>
-                <li>Click the appropriate "Send Test Data" button below to teach Make.com the data structure.</li>
-                <li>The placeholders will now appear in your Make.com module.</li>
+                <li>Put your n8n/Make workflow in "Listen for Test Event" mode.</li>
+                <li>Click the appropriate "Send Test Data" button below to teach it the data structure.</li>
+                <li>The placeholders will now appear in your automation tool.</li>
                 <li>Use the "Amend" or "Delete" buttons to customize the data payload for future needs.</li>
             </ol>
         </div>
         <div className="space-y-4">
             <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} />
             <PayloadManager title="Job Completed" action="JOB_COMPLETED" defaultHeaders={TECHNICIAN_UPDATE_HEADERS} />
+            <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={[]} />
         </div>
       </div>
     </div>
@@ -325,7 +323,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
 }
 
 const TechnicianManagement: React.FC = () => {
-    const { technicians, addTechnician, updateTechnician, deleteTechnician } = useAppContext();
+    const { technicians, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults } = useAppContext();
     const [editingTech, setEditingTech] = useState<Technician | null>(null);
     const [newTechName, setNewTechName] = useState('');
     const [newTechPin, setNewTechPin] = useState('');
@@ -348,6 +346,12 @@ const TechnicianManagement: React.FC = () => {
     const handleDelete = (id: string) => {
         if(window.confirm('Are you sure you want to remove this technician?')) {
             deleteTechnician(id);
+        }
+    }
+    
+    const handleResetDefaults = () => {
+        if(window.confirm('Are you sure? This will delete any technicians you added manually and restore the original list from the code file.')) {
+            resetTechniciansToDefaults();
         }
     }
 
@@ -387,6 +391,14 @@ const TechnicianManagement: React.FC = () => {
                      <input type="number" placeholder="PIN" value={newTechPin} onChange={e => setNewTechPin(e.target.value)} className="w-28 px-3 py-2 border rounded-md"/>
                      <button onClick={handleSave} className="bg-glen-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">Add</button>
                  </div>
+            </div>
+            
+            <div className="border-t pt-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h4 className="text-sm font-bold text-red-800 mb-1">Danger Zone</h4>
+                    <p className="text-xs text-red-600 mb-3">If your code updates aren't showing, click this to force a reset.</p>
+                    <button onClick={handleResetDefaults} className="text-sm bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 w-full">Reset to Code Defaults</button>
+                </div>
             </div>
         </div>
     )

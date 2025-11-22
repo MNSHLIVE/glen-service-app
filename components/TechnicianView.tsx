@@ -9,8 +9,9 @@ interface TechnicianViewProps {
 }
 
 const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
-  const { user, tickets, logout, technicians, syncTickets, isSyncing, lastSyncTime } = useAppContext();
+  const { user, tickets, logout, technicians, syncTickets, isSyncing, lastSyncTime, markAttendance } = useAppContext();
   const [filter, setFilter] = useState<TicketStatus | 'All'>('All');
+  const [isOnDuty, setIsOnDuty] = useState(false);
 
   const currentTechnician = technicians.find(t => t.id === user?.id);
   const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
@@ -21,21 +22,31 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
       filter === f ? 'bg-glen-blue text-white' : 'bg-gray-200 text-gray-700'
     }`;
     
-  // AUTO-SYNC LOGIC:
-  // 1. Fetch immediately when the Technician logs in.
-  // 2. Set up an interval to fetch silently every 60 seconds.
   useEffect(() => {
-      // Initial fetch (silent)
-      syncTickets(true);
+      const savedDutyStatus = localStorage.getItem(`dutyStatus_${user?.id}`);
+      if (savedDutyStatus === 'true') {
+          setIsOnDuty(true);
+      }
+  }, [user?.id]);
 
-      // Poll every 60 seconds (silent)
+  // AUTO-SYNC
+  useEffect(() => {
+      syncTickets(true);
       const intervalId = setInterval(() => {
           syncTickets(true);
       }, 60000);
-
       return () => clearInterval(intervalId);
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleAttendanceToggle = () => {
+      const newStatus = !isOnDuty;
+      setIsOnDuty(newStatus);
+      localStorage.setItem(`dutyStatus_${user?.id}`, String(newStatus));
+      
+      const action = newStatus ? 'Clock In' : 'Clock Out';
+      markAttendance(action);
+  };
   
   return (
     <div className="space-y-6">
@@ -52,7 +63,6 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-           {/* Button is now smaller/icon-only as it is secondary. Main sync is automatic. */}
            <button onClick={() => syncTickets(false)} disabled={isSyncing} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50" title="Fetch New Jobs">
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
@@ -60,6 +70,33 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
               Logout
             </button>
         </div>
+      </div>
+
+      {/* ATTENDANCE CARD */}
+      <div className={`p-4 rounded-lg shadow-md transition-colors duration-300 ${isOnDuty ? 'bg-green-50 border border-green-200' : 'bg-white border border-gray-200'}`}>
+          <div className="flex justify-between items-center">
+              <div>
+                  <h3 className="font-bold text-gray-800 flex items-center">
+                      {isOnDuty ? (
+                          <>
+                            <span className="mr-2 text-green-500 text-xl">✅</span>
+                            <span>On Duty</span>
+                          </>
+                      ) : (
+                          <span>Off Duty</span>
+                      )}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                      {isOnDuty ? 'You are tracking time.' : 'Click start when hitting the road.'}
+                  </p>
+              </div>
+              <button 
+                onClick={handleAttendanceToggle}
+                className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${isOnDuty ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-500 text-white hover:bg-green-600'}`}
+              >
+                  {isOnDuty ? 'End Day 🛑' : 'Start Day ▶️'}
+              </button>
+          </div>
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-md text-center">

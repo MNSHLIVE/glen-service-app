@@ -1,7 +1,10 @@
+
 export enum UserRole {
   Admin = 'Admin',
   Technician = 'Technician',
   Controller = 'Controller',
+  Developer = 'Developer', // Master Role (PIN 888888)
+  Coordinator = 'Coordinator', // New Role (PIN 777)
 }
 
 export enum WebhookStatus {
