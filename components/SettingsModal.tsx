@@ -149,20 +149,22 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { addToast } = useToast();
 
   const isDeveloper = user?.role === UserRole.Developer;
+  const isAdmin = user?.role === UserRole.Admin;
+  const hasFullAccess = isDeveloper || isAdmin;
 
   useEffect(() => {
     setWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
     setGoogleSheetUrl(localStorage.getItem('googleSheetUrl') || '');
     setTechnicians(contextTechnicians);
     
-    // Default to technicians tab if not developer
-    if (!isDeveloper) {
+    // Default to technicians tab if not allowed full access
+    if (!hasFullAccess) {
         setActiveTab('technicians');
     }
-  }, [contextTechnicians, isDeveloper]);
+  }, [contextTechnicians, hasFullAccess]);
 
   const handleSaveAndClose = () => {
-    if (isDeveloper) {
+    if (hasFullAccess) {
         localStorage.setItem('masterWebhookUrl', webhookUrl);
         localStorage.setItem('googleSheetUrl', googleSheetUrl);
     }
@@ -180,15 +182,15 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
             <div className="mt-4">
                 <div className="flex border-b">
-                    {isDeveloper && (
-                        <button onClick={() => setActiveTab('automation')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'automation' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Automation (Dev)</button>
+                    {hasFullAccess && (
+                        <button onClick={() => setActiveTab('automation')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'automation' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Automation</button>
                     )}
                     <button onClick={() => setActiveTab('technicians')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'technicians' ? 'border-b-2 border-glen-blue text-glen-blue' : 'text-gray-500'}`}>Technicians</button>
                 </div>
             </div>
         </div>
         <div className="p-6 overflow-y-auto flex-grow">
-            {activeTab === 'automation' && isDeveloper && <AutomationSettings 
+            {activeTab === 'automation' && hasFullAccess && <AutomationSettings 
                 webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
                 googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl}
              />}

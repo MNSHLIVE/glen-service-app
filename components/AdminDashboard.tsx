@@ -57,6 +57,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
   const [activeView, setActiveView] = useState<AdminView>('jobs');
 
   const isDeveloper = user?.role === UserRole.Developer;
+  const isAdmin = user?.role === UserRole.Admin;
+  // Allow both Developers and Admins to access settings
+  const canConfigure = isDeveloper || isAdmin;
 
   // AUTO-SYNC
   useEffect(() => {
@@ -113,8 +116,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
             
-            {/* Only Developer sees Settings */}
-            {isDeveloper && (
+            {/* Developer and Admin can see Settings */}
+            {canConfigure && (
                 <button onClick={() => setIsSettingsModalOpen(true)} className="text-sm bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Settings">
                     <SettingsIcon />
                 </button>

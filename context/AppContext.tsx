@@ -159,17 +159,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const webhookUrl = localStorage.getItem('masterWebhookUrl');
       const actionName = action.replace(/_/g, ' ').toLowerCase();
 
+      // Combine action and payload at the top level (FLAT STRUCTURE)
+      // This makes it much easier for n8n to auto-map fields.
+      finalPayload = { action, ...payload };
+
       if (webhookUrl) {
           if (action !== 'HEALTH_CHECK') {
              setWebhookStatus(WebhookStatus.Checking);
           }
           try {
-              finalPayload = { action, ...payload };
+              console.log(`[WEBHOOK SEND] Action: ${action}`, finalPayload);
               const response = await fetch(webhookUrl, {
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
-                      'X-App-Source': 'Pandit-Glen-App-Secure' // Simple security header to identify legitimate requests
+                      'X-App-Source': 'Pandit-Glen-App-Secure'
                   },
                   body: JSON.stringify(finalPayload),
               });
@@ -181,7 +185,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               } else {
                   setWebhookStatus(WebhookStatus.Error);
-                  // REMOVED: We no longer delete the URL on error. User must check it manually.
                   console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
                   addToast(`Webhook error: ${response.status}. Check Automation (n8n) is ON.`, 'error');
               }
@@ -192,7 +195,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
       } else {
           setWebhookStatus(WebhookStatus.Simulating);
-          console.log(defaultLogMessage, JSON.stringify({ action, ...payload }, null, 2));
+          console.log(defaultLogMessage, JSON.stringify(finalPayload, null, 2));
           addToast(`Automation for "${actionName}" is in simulation mode.`, 'success');
       }
   };
@@ -217,7 +220,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const responseText = await response.text();
       
-      // CRITICAL FIX: Check for "Accepted" text or n8n generic success message
       if ((responseText.includes('Accepted') || responseText.includes('Workflow started')) && responseText.length < 100) {
          throw new Error("n8n accepted the data but didn't reply. You MUST add a 'Respond to Webhook' node to the end of the path.");
       }
@@ -248,9 +250,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>) => {
+     // Send payload directly (flat), do not wrap in 'data'
      sendWebhook(
         action,
-        { data: payload },
+        payload,
         `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
     );
   };
@@ -417,9 +420,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       [COMPLAINT_SHEET_HEADERS[10]]: newTicket.status,
     };
 
+    // Send flattened payload
     sendWebhook(
         'NEW_TICKET', 
-        { data: flatPayload },
+        flatPayload,
         `[AUTOMATION] Trigger: New Ticket Created.`
     );
   };
@@ -439,7 +443,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     sendWebhook(
         'TICKET_UPDATED',
-        { data: updatePayload },
+        updatePayload,
         `[AUTOMATION] Trigger: Ticket Updated.`
     );
 
@@ -482,7 +486,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         sendWebhook(
             'JOB_COMPLETED',
-            { data: flatJobCompletedPayload },
+            flatJobCompletedPayload,
             `[AUTOMATION] Trigger: Job Completed.`
         );
     }
@@ -501,7 +505,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     sendWebhook(
         'DAMAGED_PART_UPLOADED',
-        { data: payload },
+        payload,
         `[AUTOMATION] Trigger: Damaged Part Image Uploaded.`
     );
     
@@ -520,7 +524,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const payload = { ...feedbackItem, technicianName: technician?.name || 'Unassigned' };
     sendWebhook(
         'NEW_FEEDBACK',
-        { data: payload },
+        payload,
         `[AUTOMATION] Trigger: New Feedback Received.`
     );
   };
@@ -556,12 +560,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const technician = technicians.find(t => t.id === ticket.technicianId);
 
     const payload = {
-        ticket,
+        ticketId: ticket.id,
+        customerName: ticket.customerName,
+        amountCollected: ticket.amountCollected,
+        workDone: ticket.workDone,
         technicianName: technician?.name || 'Unassigned',
+        date: new Date().toISOString(),
     };
     sendWebhook(
         'GENERATE_RECEIPT',
-        { data: payload },
+        payload,
         `[AUTOMATION] Trigger: Receipt Generated.`
     );
   };
@@ -579,7 +587,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       sendWebhook(
           'ATTENDANCE',
-          { data: attendancePayload },
+          attendancePayload,
           `[AUTOMATION] Trigger: Attendance ${status} for ${user.name}`
       );
   };
