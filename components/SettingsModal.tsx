@@ -12,7 +12,8 @@ const PayloadManager: React.FC<{
     title: string;
     action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE';
     defaultHeaders: string[];
-}> = ({ title, action, defaultHeaders }) => {
+    webhookUrlOverride: string;
+}> = ({ title, action, defaultHeaders, webhookUrlOverride }) => {
     const { sendCustomWebhookPayload } = useAppContext();
     const [payload, setPayload] = useState<Array<{ id: number; key: string; value: any }>>([]);
     const nextId = React.useRef(0);
@@ -105,7 +106,7 @@ const PayloadManager: React.FC<{
             return acc;
         }, {} as Record<string, any>);
 
-        sendCustomWebhookPayload(action, objectPayload);
+        sendCustomWebhookPayload(action, objectPayload, webhookUrlOverride);
     };
 
     const handleReset = () => {
@@ -220,6 +221,10 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
    const { webhookStatus, checkWebhookHealth } = useAppContext();
    const isChecking = webhookStatus === WebhookStatus.Checking;
 
+   // Determine mode based on URL
+   const isTestUrl = webhookUrl.includes('webhook-test');
+   const isProductionUrl = webhookUrl.includes('webhook') && !isTestUrl;
+
    const handleHealthCheck = useCallback(async () => {
        await checkWebhookHealth(webhookUrl);
    }, [webhookUrl, checkWebhookHealth]);
@@ -280,14 +285,32 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
                       value={webhookUrl}
                       onChange={(e) => setWebhookUrl(e.target.value)}
                       placeholder="https://n8n.your-domain.com/webhook/..."
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue disabled:bg-gray-100"
-                      disabled={isChecking}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-glen-blue focus:border-glen-blue"
+                      disabled={false}
                   />
                   <button onClick={handleHealthCheck} disabled={isChecking} className="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors disabled:bg-gray-400 flex items-center whitespace-nowrap">
                       {isChecking ? <SpinnerIcon/> : <HealthCheckIcon/>}
                       <span className="ml-2">{isChecking ? 'Checking...' : 'Test Connection'}</span>
                   </button>
               </div>
+              
+              {/* Intelligent Mode Detection Feedback */}
+              {isTestUrl && (
+                  <div className="mt-2 bg-orange-50 border border-orange-200 text-orange-800 p-2 rounded text-xs flex items-center">
+                      <span className="font-bold mr-1">⚠️ TEST MODE DETECTED:</span>
+                      You MUST click "Execute Workflow" in n8n before EVERY test button click.
+                  </div>
+              )}
+              {isProductionUrl && (
+                  <div className="mt-2 bg-green-50 border border-green-200 text-green-800 p-2 rounded text-xs flex items-center">
+                      <span className="font-bold mr-1">✅ PRODUCTION MODE:</span>
+                      Ensure your n8n workflow is switched to ACTIVE (Top right toggle).
+                  </div>
+              )}
+              
+              <p className="text-xs text-gray-500 mt-1">
+                 Supports n8n Webhook nodes.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Master Google Sheet URL</label>
@@ -305,19 +328,17 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
 
       <div className="border-t pt-6">
         <h4 className="text-lg font-semibold text-gray-800 mb-2">Automation Payload Manager</h4>
-        <div className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
-            <p className="font-bold text-blue-800">Instructions:</p>
-            <ol className="list-decimal list-inside mt-1 space-y-1">
-                <li>Put your n8n/Make workflow in "Listen for Test Event" mode.</li>
-                <li>Click the appropriate "Send Test Data" button below to teach it the data structure.</li>
-                <li>The placeholders will now appear in your automation tool.</li>
-                <li>Use the "Amend" or "Delete" buttons to customize the data payload for future needs.</li>
-            </ol>
+        <div className="text-sm text-gray-600 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+             <p className="font-bold text-blue-800 mb-1">Testing Guide:</p>
+             <ul className="list-disc list-inside space-y-1 mt-1 text-blue-900 text-xs">
+                 <li>Use this section to send sample data to n8n so you can map your Google Sheet nodes.</li>
+                 <li>Click <strong>"Execute Workflow"</strong> in n8n, then click a button below.</li>
+             </ul>
         </div>
         <div className="space-y-4">
-            <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} />
-            <PayloadManager title="Job Completed" action="JOB_COMPLETED" defaultHeaders={TECHNICIAN_UPDATE_HEADERS} />
-            <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={[]} />
+            <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
+            <PayloadManager title="Job Completed" action="JOB_COMPLETED" defaultHeaders={TECHNICIAN_UPDATE_HEADERS} webhookUrlOverride={webhookUrl} />
+            <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={[]} webhookUrlOverride={webhookUrl} />
         </div>
       </div>
     </div>

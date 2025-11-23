@@ -29,7 +29,7 @@ interface AppContextType {
   resetAllTechnicianPoints: () => void;
   syncTickets: (isBackground?: boolean) => Promise<void>;
   checkWebhookHealth: (urlOverride?: string) => Promise<void>;
-  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>) => void;
+  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>, urlOverride?: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -59,6 +59,29 @@ const createDummyTicket = (): Ticket => ({
 });
 
 
+// Helper to diagnose Network Errors
+const diagnoseNetworkError = (error: any, url: string): string => {
+    if (error.name !== 'TypeError' || error.message !== 'Failed to fetch') {
+        return error.message || 'Unknown error occurred.';
+    }
+
+    const isHttpsApp = window.location.protocol === 'https:';
+    const isHttpUrl = url.startsWith('http:');
+    const isLocalhostTarget = url.includes('localhost') || url.includes('127.0.0.1');
+    const isRemoteApp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+    if (isHttpsApp && isHttpUrl) {
+        return 'Security Block: Your app is HTTPS but n8n is HTTP. Browsers block this. Use ngrok or HTTPS for n8n.';
+    } 
+    
+    if (isLocalhostTarget && isRemoteApp) {
+        return 'Connection Failed: You are on a phone/remote device trying to connect to "localhost". Use your PC\'s local IP (e.g., 192.168.1.5) instead.';
+    }
+
+    return 'CORS Error: n8n is running but rejected the browser. Set "WEBHOOK_CORS_ORIGIN=*" in your n8n environment variables.';
+};
+
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -69,9 +92,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const { addToast } = useToast();
   
-  // Define finalPayload variable for sendWebhook usage
-  let finalPayload: any;
-
   // Effect for loading data from localStorage ONCE on startup, with error handling
   useEffect(() => {
     try {
@@ -120,9 +140,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Initial Webhook Status Check
       const storedUrl = localStorage.getItem('masterWebhookUrl');
       if (storedUrl) {
-        setWebhookStatus(WebhookStatus.Checking);
-        // We don't run a full fetch here to avoid lag, just set state
-        // The user can trigger a test from settings
+        // Don't block UI with checking state on load, allow user to edit
+        setWebhookStatus(WebhookStatus.Unknown);
       } else {
         setWebhookStatus(WebhookStatus.Simulating);
       }
@@ -155,28 +174,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [technicians]);
 
 
-  const sendWebhook = async (action: string, payload: object, defaultLogMessage: string) => {
-      const webhookUrl = localStorage.getItem('masterWebhookUrl');
+  const sendWebhook = async (action: string, payload: object, defaultLogMessage: string, urlOverride?: string) => {
+      const webhookUrl = urlOverride || localStorage.getItem('masterWebhookUrl');
       const actionName = action.replace(/_/g, ' ').toLowerCase();
 
       // Combine action and payload at the top level (FLAT STRUCTURE)
-      // This makes it much easier for n8n to auto-map fields.
-      finalPayload = { action, ...payload };
+      const finalPayload = { action, ...payload };
 
       if (webhookUrl) {
           if (action !== 'HEALTH_CHECK') {
+             // Only set to checking if not a health check to avoid UI flicker on manual tests
              setWebhookStatus(WebhookStatus.Checking);
           }
           try {
-              console.log(`[WEBHOOK SEND] Action: ${action}`, finalPayload);
+              console.log(`[WEBHOOK SEND] Action: ${action} to ${webhookUrl}`, finalPayload);
               const response = await fetch(webhookUrl, {
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
-                      'X-App-Source': 'Pandit-Glen-App-Secure'
                   },
                   body: JSON.stringify(finalPayload),
+                  mode: 'cors', // Explicitly request CORS
               });
+
               if (response.ok) {
                   setWebhookStatus(WebhookStatus.Connected);
                   if (action !== 'HEALTH_CHECK') {
@@ -185,13 +205,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               } else {
                   setWebhookStatus(WebhookStatus.Error);
-                  console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
-                  addToast(`Webhook error: ${response.status}. Check Automation (n8n) is ON.`, 'error');
+                  
+                  let helpfulMessage = `Webhook error: ${response.status}.`;
+                  // Try to read n8n specific error hint
+                  try {
+                      const errorJson = await response.json();
+                      if (errorJson.hint) {
+                          helpfulMessage = `n8n Hint: ${errorJson.hint}`;
+                      } else if (errorJson.message) {
+                          helpfulMessage = `n8n Error: ${errorJson.message}`;
+                      }
+                  } catch (e) {
+                      // If parsing JSON fails, fall back to status codes
+                      if (response.status === 404) {
+                          if (webhookUrl.includes('webhook-test')) {
+                             helpfulMessage = "Test Expired: Click 'Execute Workflow' in n8n again.";
+                          } else {
+                             helpfulMessage = "Webhook Not Found: Check URL or turn on 'Active' switch.";
+                          }
+                      } else if (response.status === 502) {
+                          helpfulMessage = "n8n is restarting or unreachable.";
+                      }
+                  }
+
+                  console.error(`[AUTOMATION] Failed: ${helpfulMessage}`);
+                  addToast(helpfulMessage, 'error');
               }
-          } catch (error) {
+          } catch (error: any) {
               setWebhookStatus(WebhookStatus.Error);
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-              addToast(`Failed to send webhook. Ensure n8n workflow is active.`, 'error');
+              const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
+              addToast(diagnosticMsg, 'error');
           }
       } else {
           setWebhookStatus(WebhookStatus.Simulating);
@@ -213,10 +257,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'X-App-Source': 'Pandit-Glen-App-Secure'
         },
         body: JSON.stringify({ action: 'HEALTH_CHECK' }),
+        mode: 'cors',
       });
+
+      if (!response.ok) {
+          // Attempt to parse n8n error
+          let helpfulError = `Webhook error ${response.status}`;
+          try {
+              const errData = await response.json();
+              if (errData.hint) helpfulError = errData.hint;
+              else if (errData.message) helpfulError = errData.message;
+          } catch(e) {
+              if (response.status === 404) {
+                 if (webhookUrl.includes('webhook-test')) helpfulError = "Test URL Expired. Click 'Execute' in n8n.";
+                 else helpfulError = "Webhook URL invalid or Workflow inactive.";
+              }
+          }
+          throw new Error(helpfulError);
+      }
 
       const responseText = await response.text();
       
@@ -232,29 +292,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         throw new Error(`Automation returned text "${responseText}" instead of JSON. Add a 'Respond to Webhook' node.`);
       }
 
-      if (response.ok) {
-        if (data.status === 'ok') {
+      if (data.status === 'ok') {
           addToast('Success! Automation system is online and ready.', 'success');
           setWebhookStatus(WebhookStatus.Connected);
-        } else {
-          throw new Error(`Webhook responded, but status was not 'ok'. Got: ${JSON.stringify(data)}`);
-        }
       } else {
-        throw new Error(`Webhook responded with status: ${response.status}`);
+          throw new Error(`Webhook responded, but status was not 'ok'. Got: ${JSON.stringify(data)}`);
       }
     } catch (error: any) {
       console.error('[HEALTH CHECK] Failed:', error);
-      addToast(error.message || 'Connection failed. Ensure Scenario is ON.', 'error');
+      const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
+      addToast(diagnosticMsg, 'error');
       setWebhookStatus(WebhookStatus.Error);
     }
   };
 
-  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>) => {
+  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>, urlOverride?: string) => {
      // Send payload directly (flat), do not wrap in 'data'
      sendWebhook(
         action,
         payload,
-        `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`
+        `[AUTOMATION] Trigger: Sending custom test data for ${action}. (Master Webhook not configured)`,
+        urlOverride
     );
   };
 
@@ -294,14 +352,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'X-App-Source': 'Pandit-Glen-App-Secure'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        mode: 'cors',
       });
 
       if (!response.ok) {
+        let helpfulError = `Sync failed: ${response.status}`;
+        try {
+            const errData = await response.json();
+            if (errData.hint) helpfulError = `n8n: ${errData.hint}`;
+            else if (errData.message) helpfulError = `n8n: ${errData.message}`;
+        } catch(e) {}
+        
         setWebhookStatus(WebhookStatus.Error);
-        throw new Error(`Sync failed with status: ${response.status}`);
+        throw new Error(helpfulError);
       }
 
       const responseText = await response.text();
@@ -388,7 +453,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setWebhookStatus(WebhookStatus.Error);
       if (!isBackground) {
         console.error('[SYNC] Error syncing tickets:', error);
-        addToast(error.message || 'Sync failed. Check Automation is ON.', 'error');
+        const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
+        addToast(diagnosticMsg, 'error');
       }
     } finally {
       setIsSyncing(false);
