@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Technician, WebhookStatus, UserRole } from '../types';
@@ -115,7 +116,16 @@ const PayloadManager: React.FC<{
     return (
          <div className="border p-4 rounded-lg bg-gray-50">
             <h5 className="font-bold text-gray-700 mb-2">{title}</h5>
+            <div className="mb-2 p-2 bg-blue-50 border border-blue-100 rounded text-xs text-blue-800">
+                <strong>n8n Switch Rule:</strong> set property <code>action</code> equal to <code>{action}</code>
+            </div>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                 {/* Read-only Action Row */}
+                 <div className="grid grid-cols-[30%_1fr_auto] gap-2 items-center opacity-75">
+                    <input type="text" value="action" disabled className="w-full px-2 py-1 border rounded-md text-sm font-mono bg-gray-100"/>
+                    <input type="text" value={action} disabled className="w-full px-2 py-1 border rounded-md text-sm font-mono bg-gray-100 font-bold"/>
+                    <div className="w-6"></div>
+                </div>
                 {payload.map((item) => (
                     <div key={item.id} className="grid grid-cols-[30%_1fr_auto] gap-2 items-center">
                         <input type="text" value={item.key} onChange={e => handleKeyChange(item.id, e.target.value)} className="w-full px-2 py-1 border rounded-md text-sm font-mono"/>
@@ -128,11 +138,11 @@ const PayloadManager: React.FC<{
             </div>
             <div className="flex flex-wrap items-center justify-between mt-4 pt-4 border-t space-y-2">
                  <div className="flex items-center space-x-2">
-                     <button onClick={handleAddField} className="text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Amend (Add Field)</button>
-                     <button onClick={handleReset} className="text-sm bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600">Reset to Default</button>
+                     <button onClick={handleAddField} className="text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Amend</button>
+                     <button onClick={handleReset} className="text-sm bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600">Reset</button>
                  </div>
                  <button onClick={handleSendTest} className="text-sm bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">
-                    Send Test '{title}' Data
+                    Send Test Data
                 </button>
             </div>
         </div>
