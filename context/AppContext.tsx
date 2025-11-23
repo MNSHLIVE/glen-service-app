@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus } from '../types';
 import { TECHNICIANS } from '../constants';
@@ -57,29 +56,6 @@ const createDummyTicket = (): Ticket => ({
     freeService: false,
     pointsAwarded: true,
 });
-
-
-// Helper to diagnose Network Errors
-const diagnoseNetworkError = (error: any, url: string): string => {
-    if (error.name !== 'TypeError' || error.message !== 'Failed to fetch') {
-        return error.message || 'Unknown error occurred.';
-    }
-
-    const isHttpsApp = window.location.protocol === 'https:';
-    const isHttpUrl = url.startsWith('http:');
-    const isLocalhostTarget = url.includes('localhost') || url.includes('127.0.0.1');
-    const isRemoteApp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-
-    if (isHttpsApp && isHttpUrl) {
-        return 'Security Block: Your app is HTTPS but n8n is HTTP. Browsers block this. Use ngrok or HTTPS for n8n.';
-    } 
-    
-    if (isLocalhostTarget && isRemoteApp) {
-        return 'Connection Failed: You are on a phone/remote device trying to connect to "localhost". Use your PC\'s local IP (e.g., 192.168.1.5) instead.';
-    }
-
-    return 'CORS Error: n8n is running but rejected the browser. Set "WEBHOOK_CORS_ORIGIN=*" in your n8n environment variables.';
-};
 
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -187,16 +163,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              setWebhookStatus(WebhookStatus.Checking);
           }
           try {
-              console.log(`[WEBHOOK SEND] Action: ${action} to ${webhookUrl}`, finalPayload);
+              console.log(`[WEBHOOK PAYLOAD] Sending to ${webhookUrl}:`, JSON.stringify(finalPayload, null, 2));
               const response = await fetch(webhookUrl, {
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
+                      // Removed X-App-Source to reduce CORS preflight issues
                   },
                   body: JSON.stringify(finalPayload),
-                  mode: 'cors', // Explicitly request CORS
               });
-
               if (response.ok) {
                   setWebhookStatus(WebhookStatus.Connected);
                   if (action !== 'HEALTH_CHECK') {
@@ -205,37 +180,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               } else {
                   setWebhookStatus(WebhookStatus.Error);
-                  
-                  let helpfulMessage = `Webhook error: ${response.status}.`;
-                  // Try to read n8n specific error hint
-                  try {
-                      const errorJson = await response.json();
-                      if (errorJson.hint) {
-                          helpfulMessage = `n8n Hint: ${errorJson.hint}`;
-                      } else if (errorJson.message) {
-                          helpfulMessage = `n8n Error: ${errorJson.message}`;
-                      }
-                  } catch (e) {
-                      // If parsing JSON fails, fall back to status codes
-                      if (response.status === 404) {
-                          if (webhookUrl.includes('webhook-test')) {
-                             helpfulMessage = "Test Expired: Click 'Execute Workflow' in n8n again.";
-                          } else {
-                             helpfulMessage = "Webhook Not Found: Check URL or turn on 'Active' switch.";
-                          }
-                      } else if (response.status === 502) {
-                          helpfulMessage = "n8n is restarting or unreachable.";
-                      }
-                  }
-
-                  console.error(`[AUTOMATION] Failed: ${helpfulMessage}`);
-                  addToast(helpfulMessage, 'error');
+                  console.error(`[AUTOMATION] Failed to send data to webhook for action ${action}. Status: ${response.status}`);
+                  addToast(`Webhook error: ${response.status}. Check Automation (n8n) is ON.`, 'error');
               }
           } catch (error: any) {
               setWebhookStatus(WebhookStatus.Error);
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
-              const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
-              addToast(diagnosticMsg, 'error');
+              
+              // More descriptive error handling
+              let errorMsg = 'Failed to send webhook.';
+              if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+                  const isHttps = window.location.protocol === 'https:';
+                  const isHttpUrl = webhookUrl.startsWith('http:');
+                  if (isHttps && isHttpUrl) {
+                      errorMsg = 'Blocked: Mixed Content. Cannot send to HTTP n8n from HTTPS app.';
+                  } else {
+                      errorMsg = 'Network Error. Check if n8n is running and CORS is enabled.';
+                  }
+              }
+
+              addToast(`${errorMsg} Ensure n8n is active/listening.`, 'error');
           }
       } else {
           setWebhookStatus(WebhookStatus.Simulating);
@@ -259,49 +223,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ action: 'HEALTH_CHECK' }),
-        mode: 'cors',
       });
 
-      if (!response.ok) {
-          // Attempt to parse n8n error
-          let helpfulError = `Webhook error ${response.status}`;
-          try {
-              const errData = await response.json();
-              if (errData.hint) helpfulError = errData.hint;
-              else if (errData.message) helpfulError = errData.message;
-          } catch(e) {
-              if (response.status === 404) {
-                 if (webhookUrl.includes('webhook-test')) helpfulError = "Test URL Expired. Click 'Execute' in n8n.";
-                 else helpfulError = "Webhook URL invalid or Workflow inactive.";
-              }
-          }
-          throw new Error(helpfulError);
-      }
-
       const responseText = await response.text();
-      
-      if ((responseText.includes('Accepted') || responseText.includes('Workflow started')) && responseText.length < 100) {
-         throw new Error("n8n accepted the data but didn't reply. You MUST add a 'Respond to Webhook' node to the end of the path.");
-      }
 
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("[HEALTH CHECK] Response was not JSON:", responseText);
-        throw new Error(`Automation returned text "${responseText}" instead of JSON. Add a 'Respond to Webhook' node.`);
-      }
-
-      if (data.status === 'ok') {
-          addToast('Success! Automation system is online and ready.', 'success');
-          setWebhookStatus(WebhookStatus.Connected);
+      if (response.ok) {
+        setWebhookStatus(WebhookStatus.Connected);
+        
+        // Try to parse for perfect configuration, but don't fail if just connected
+        try {
+            const data = JSON.parse(responseText);
+            if (data.status === 'ok') {
+                addToast('Success! Automation system is online and ready.', 'success');
+            } else {
+                 addToast('Connected! (n8n received the signal)', 'success');
+            }
+        } catch (e) {
+            // Not JSON, likely just a 200 OK text response. This is fine for connectivity.
+            console.log("[HEALTH CHECK] Non-JSON response (200 OK):", responseText);
+            addToast('Connected! (n8n received the signal)', 'success');
+        }
       } else {
-          throw new Error(`Webhook responded, but status was not 'ok'. Got: ${JSON.stringify(data)}`);
+        throw new Error(`Webhook responded with status: ${response.status}`);
       }
     } catch (error: any) {
       console.error('[HEALTH CHECK] Failed:', error);
-      const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
-      addToast(diagnosticMsg, 'error');
+      
+      let errorMsg = error.message || 'Connection failed.';
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+          errorMsg = 'Network Error: Could not reach n8n. Check CORS/Server.';
+      }
+      
+      addToast(errorMsg, 'error');
       setWebhookStatus(WebhookStatus.Error);
     }
   };
@@ -353,24 +306,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         headers: { 
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
-        mode: 'cors',
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        let helpfulError = `Sync failed: ${response.status}`;
-        try {
-            const errData = await response.json();
-            if (errData.hint) helpfulError = `n8n: ${errData.hint}`;
-            else if (errData.message) helpfulError = `n8n: ${errData.message}`;
-        } catch(e) {}
-        
         setWebhookStatus(WebhookStatus.Error);
-        throw new Error(helpfulError);
+        throw new Error(`Sync failed with status: ${response.status}`);
       }
 
       const responseText = await response.text();
       
+      // For Sync, we DO expect data back, so we keep the check stricter than Health Check
       if ((responseText.includes('Accepted') || responseText.includes('Workflow started')) && responseText.length < 100) {
          throw new Error("n8n accepted command but sent no data. Add 'Respond to Webhook' node to Path 3.");
       }
@@ -453,8 +399,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setWebhookStatus(WebhookStatus.Error);
       if (!isBackground) {
         console.error('[SYNC] Error syncing tickets:', error);
-        const diagnosticMsg = diagnoseNetworkError(error, webhookUrl);
-        addToast(diagnosticMsg, 'error');
+        
+        let errorMsg = error.message || 'Sync failed.';
+        if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+           errorMsg = 'Sync Error: Could not reach n8n (CORS/Network).';
+        }
+        addToast(errorMsg, 'error');
       }
     } finally {
       setIsSyncing(false);

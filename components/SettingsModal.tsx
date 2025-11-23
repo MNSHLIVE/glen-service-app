@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Technician, WebhookStatus, UserRole } from '../types';
@@ -221,10 +220,6 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
    const { webhookStatus, checkWebhookHealth } = useAppContext();
    const isChecking = webhookStatus === WebhookStatus.Checking;
 
-   // Determine mode based on URL
-   const isTestUrl = webhookUrl.includes('webhook-test');
-   const isProductionUrl = webhookUrl.includes('webhook') && !isTestUrl;
-
    const handleHealthCheck = useCallback(async () => {
        await checkWebhookHealth(webhookUrl);
    }, [webhookUrl, checkWebhookHealth]);
@@ -293,21 +288,6 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
                       <span className="ml-2">{isChecking ? 'Checking...' : 'Test Connection'}</span>
                   </button>
               </div>
-              
-              {/* Intelligent Mode Detection Feedback */}
-              {isTestUrl && (
-                  <div className="mt-2 bg-orange-50 border border-orange-200 text-orange-800 p-2 rounded text-xs flex items-center">
-                      <span className="font-bold mr-1">⚠️ TEST MODE DETECTED:</span>
-                      You MUST click "Execute Workflow" in n8n before EVERY test button click.
-                  </div>
-              )}
-              {isProductionUrl && (
-                  <div className="mt-2 bg-green-50 border border-green-200 text-green-800 p-2 rounded text-xs flex items-center">
-                      <span className="font-bold mr-1">✅ PRODUCTION MODE:</span>
-                      Ensure your n8n workflow is switched to ACTIVE (Top right toggle).
-                  </div>
-              )}
-              
               <p className="text-xs text-gray-500 mt-1">
                  Supports n8n Webhook nodes.
               </p>
@@ -328,12 +308,18 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
 
       <div className="border-t pt-6">
         <h4 className="text-lg font-semibold text-gray-800 mb-2">Automation Payload Manager</h4>
-        <div className="text-sm text-gray-600 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-             <p className="font-bold text-blue-800 mb-1">Testing Guide:</p>
-             <ul className="list-disc list-inside space-y-1 mt-1 text-blue-900 text-xs">
-                 <li>Use this section to send sample data to n8n so you can map your Google Sheet nodes.</li>
-                 <li>Click <strong>"Execute Workflow"</strong> in n8n, then click a button below.</li>
-             </ul>
+        <div className="text-sm text-gray-600 mb-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-start">
+               <span className="text-xl mr-2">💡</span>
+               <div>
+                   <p className="font-bold text-yellow-800 mb-1">Troubleshooting "Failed to Send"</p>
+                   <ul className="list-disc list-inside space-y-1 mt-1 text-yellow-900 text-xs">
+                       <li><strong>Test URL (.../webhook-test/...):</strong> You MUST click <strong>"Execute Workflow"</strong> (or "Listen") in n8n <em>before</em> clicking "Send Test Data" here.</li>
+                       <li><strong>Production URL (.../webhook/...):</strong> Ensure your workflow is <strong>Active</strong> (Green toggle).</li>
+                       <li><strong>Network Error:</strong> Usually means n8n blocked the connection (CORS) or the URL is HTTP (Mixed Content).</li>
+                   </ul>
+               </div>
+            </div>
         </div>
         <div className="space-y-4">
             <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
