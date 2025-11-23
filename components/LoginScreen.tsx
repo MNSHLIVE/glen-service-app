@@ -145,14 +145,14 @@ const LoginScreen: React.FC = () => {
                       <p className="font-bold text-glen-blue mb-1">🤖 Android</p>
                       <ul className="list-disc list-inside space-y-1">
                           <li>Open in <strong>Chrome</strong>.</li>
-                          <li>Tap <strong>3 dots (⋮)</strong> > <strong>"Install App"</strong>.</li>
+                          <li>Tap <strong>3 dots (⋮)</strong> &gt; <strong>"Install App"</strong>.</li>
                       </ul>
                   </div>
                   <div className="bg-gray-100 p-3 rounded-lg">
                       <p className="font-bold text-gray-800 mb-1">🍎 iPhone (iOS)</p>
                       <ul className="list-disc list-inside space-y-1">
                           <li>Open in <strong>Safari</strong>.</li>
-                          <li>Tap <strong>Share</strong> > <strong>"Add to Home Screen"</strong>.</li>
+                          <li>Tap <strong>Share</strong> &gt; <strong>"Add to Home Screen"</strong>.</li>
                       </ul>
                   </div>
               </div>

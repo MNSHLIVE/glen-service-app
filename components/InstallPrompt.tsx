@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 
 const InstallPrompt: React.FC = () => {
@@ -14,9 +15,9 @@ const InstallPrompt: React.FC = () => {
       setIsVisible(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('beforeinstallprompt' as any, handler);
 
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt' as any, handler);
   }, []);
 
   const handleInstallClick = async () => {
