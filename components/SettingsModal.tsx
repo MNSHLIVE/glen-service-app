@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Technician, WebhookStatus, UserRole } from '../types';
 import { useToast } from '../context/ToastContext';
-import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
+import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS, ATTENDANCE_SHEET_HEADERS } from '../data/sheetHeaders';
 
 type SettingsTab = 'automation' | 'technicians';
 
@@ -50,13 +50,25 @@ const PayloadManager: React.FC<{
         }
 
         if (action === 'ATTENDANCE') {
-             return [
-                 { id: 1, key: 'technicianId', value: 'tech-test' },
-                 { id: 2, key: 'technicianName', value: 'Test Technician' },
-                 { id: 3, key: 'status', value: 'Clock In' },
-                 { id: 4, key: 'timestamp', value: now.toLocaleString() },
-                 { id: 5, key: 'timestampISO', value: now.toISOString() },
-             ];
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            const attendanceData = {
+                [ATTENDANCE_SHEET_HEADERS[0]]: 'tech-test',
+                [ATTENDANCE_SHEET_HEADERS[1]]: 'Test Technician',
+                [ATTENDANCE_SHEET_HEADERS[2]]: 'Clock In',
+                [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
+                [ATTENDANCE_SHEET_HEADERS[4]]: now.toISOString(),
+                [ATTENDANCE_SHEET_HEADERS[5]]: timeString, // Check In Time
+                [ATTENDANCE_SHEET_HEADERS[6]]: '', // Check Out Time
+            }
+             const finalPayload = defaultHeaders.map((header) => {
+                 const id = nextId.current++;
+                 return {
+                    id: id,
+                    key: header,
+                    value: attendanceData[header] ?? '',
+                };
+            });
+            return finalPayload;
         }
         
         const finalPayload = defaultHeaders.map((header) => {
@@ -322,11 +334,11 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
             <div className="flex items-start">
                <span className="text-xl mr-2">💡</span>
                <div>
-                   <p className="font-bold text-yellow-800 mb-1">Troubleshooting "Failed to Send"</p>
-                   <ul className="list-disc list-inside space-y-1 mt-1 text-yellow-900 text-xs">
-                       <li><strong>Test URL (.../webhook-test/...):</strong> You MUST click <strong>"Execute Workflow"</strong> (or "Listen") in n8n <em>before</em> clicking "Send Test Data" here.</li>
-                       <li><strong>Production URL (.../webhook/...):</strong> Ensure your workflow is <strong>Active</strong> (Green toggle).</li>
-                       <li><strong>Network Error:</strong> Usually means n8n blocked the connection (CORS) or the URL is HTTP (Mixed Content).</li>
+                   <p className="font-bold text-yellow-800 mb-1">Attendance Sheet Setup</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1 text-yellow-900 text-xs">
+                       <li>Create a 3rd Sheet named <strong>Attendance</strong>.</li>
+                       <li>Add columns: <strong>Technician ID, Technician Name, Attendance Status, Timestamp, Timestamp ISO, Check In Time, Check Out Time</strong></li>
+                       <li>The app sends ONE row per action (Clock In / Clock Out).</li>
                    </ul>
                </div>
             </div>
@@ -334,7 +346,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
         <div className="space-y-4">
             <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
             <PayloadManager title="Job Completed" action="JOB_COMPLETED" defaultHeaders={TECHNICIAN_UPDATE_HEADERS} webhookUrlOverride={webhookUrl} />
-            <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={[]} webhookUrlOverride={webhookUrl} />
+            <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={ATTENDANCE_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
         </div>
       </div>
     </div>
@@ -391,7 +403,7 @@ const TechnicianManagement: React.FC = () => {
                                 <>
                                     <div>
                                         <p className="font-semibold">{tech.name}</p>
-                                        <p className="text-sm text-gray-500">PIN: {tech.password} | Points: {tech.points}</p>
+                                        <p className="text-sm text-gray-500">ID: {tech.id} | PIN: {tech.password}</p>
                                     </div>
                                     <div className="space-x-2">
                                         <button onClick={() => setEditingTech(tech)} className="text-sm bg-gray-200 py-1 px-3 rounded-lg">Edit</button>

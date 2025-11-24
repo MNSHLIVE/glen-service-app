@@ -1,8 +1,9 @@
+
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
-import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS } from '../data/sheetHeaders';
+import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS, ATTENDANCE_SHEET_HEADERS } from '../data/sheetHeaders';
 import { APP_CONFIG } from '../config'; // Import the new config
 
 interface AppContextType {
@@ -593,12 +594,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
       if (!user) return;
       const now = new Date();
+      // Format time as "09:00 AM"
+      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
       const attendancePayload = {
-          technicianId: user.id,
-          technicianName: user.name,
-          status: status,
-          timestamp: now.toLocaleString(),
-          timestampISO: now.toISOString(),
+          [ATTENDANCE_SHEET_HEADERS[0]]: user.id,
+          [ATTENDANCE_SHEET_HEADERS[1]]: user.name,
+          [ATTENDANCE_SHEET_HEADERS[2]]: status,
+          [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
+          [ATTENDANCE_SHEET_HEADERS[4]]: now.toISOString(),
+          // Conditionally fill Check In or Check Out based on the action
+          [ATTENDANCE_SHEET_HEADERS[5]]: status === 'Clock In' ? timeString : '', 
+          [ATTENDANCE_SHEET_HEADERS[6]]: status === 'Clock Out' ? timeString : '',
       };
 
       sendWebhook(
