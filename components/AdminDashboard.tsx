@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AddTicketModal from './AddTicketModal';
@@ -103,7 +102,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewTicket }) => {
               <p className="text-sm text-gray-500">
                   {isDeveloper ? 'Developer Mode' : 'Admin Dashboard'}
               </p>
-              <span className="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">v2.7</span>
+              <span className="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">v3.3</span>
               {lastSyncTime && (
                   <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                       Updated: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
