@@ -12,6 +12,7 @@ interface AppContextType {
   technicians: Technician[];
   feedback: Feedback[];
   isSyncing: boolean;
+  isAppLoading: boolean; // New state for session restoration
   webhookStatus: WebhookStatus;
   lastSyncTime: Date | null;
   login: (user: User) => void;
@@ -67,6 +68,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAppLoading, setIsAppLoading] = useState(true); // Start loading
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const { addToast } = useToast();
@@ -80,6 +82,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       if (APP_CONFIG.GOOGLE_SHEET_URL) {
           localStorage.setItem('googleSheetUrl', APP_CONFIG.GOOGLE_SHEET_URL);
+      }
+
+      // 1. Restore User Session
+      const savedUser = localStorage.getItem('currentUser');
+      if (savedUser) {
+          try {
+              setUser(JSON.parse(savedUser));
+          } catch (e) {
+              console.error("Failed to restore user session");
+              localStorage.removeItem('currentUser');
+          }
       }
 
       // Load Technicians
@@ -154,6 +167,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.removeItem('tickets');
       setTechnicians(TECHNICIANS);
       setTickets([createDummyTicket()]);
+    } finally {
+        setIsAppLoading(false); // Done loading
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -284,9 +299,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const login = (loggedInUser: User) => setUser(loggedInUser);
+  const login = (loggedInUser: User) => {
+      setUser(loggedInUser);
+      localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+  };
+  
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('currentUser');
   };
 
 
@@ -654,9 +674,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addToast('All technician points have been reset to 0.', 'success');
     }
   };
+  
+  const refreshData = () => {
+      // CLEAR LOCAL DATA
+      localStorage.removeItem('tickets');
+      localStorage.removeItem('technicians');
+      localStorage.removeItem('dutyStatus');
+      // DO NOT clear credentials or webhook URL
+      window.location.reload();
+  }
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime, isAppLoading };
 
   return (
     <AppContext.Provider value={contextValue}>

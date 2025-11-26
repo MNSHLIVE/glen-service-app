@@ -24,7 +24,7 @@ const Logo: React.FC = () => (
 
 
 const App: React.FC = () => {
-  const { user } = useAppContext();
+  const { user, isAppLoading } = useAppContext();
   const [viewingTicketId, setViewingTicketId] = useState<string | null>(null);
 
   const handleViewTicket = (ticketId: string) => {
@@ -34,6 +34,17 @@ const App: React.FC = () => {
   const handleBackToList = () => {
     setViewingTicketId(null);
   };
+  
+  if (isAppLoading) {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+             <div className="animate-pulse">
+                <Logo />
+             </div>
+             <p className="mt-4 text-gray-400 text-sm">Starting up...</p>
+          </div>
+      )
+  }
 
   const renderContent = () => {
     if (!user) {
