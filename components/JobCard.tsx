@@ -104,6 +104,12 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
                             <button onClick={() => onViewDetails(ticket.id)} className="text-sm font-bold text-glen-blue mt-1 block">View &gt;</button>
                         </div>
                     </div>
+                    
+                    {ticket.adminNotes && (
+                        <div className="bg-red-50 border border-red-200 p-2 rounded text-xs text-red-800 font-medium">
+                            ⚠️ Note: {ticket.adminNotes}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                        <div>
@@ -147,7 +153,11 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
 const TechnicianJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
 
   return (
-    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden relative">
+      {/* Visual indicator for Admin Notes */}
+      {ticket.adminNotes && (
+          <div className="absolute top-0 right-0 border-t-[30px] border-t-red-500 border-l-[30px] border-l-transparent transform rotate-0 z-10"></div>
+      )}
       <div className="p-4">
         <div className="flex justify-between items-start">
           <div>
@@ -158,6 +168,13 @@ const TechnicianJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) =>
             {ticket.status}
           </span>
         </div>
+
+        {ticket.adminNotes && (
+            <div className="mt-3 bg-red-50 border-l-4 border-red-500 p-2 rounded-r shadow-sm">
+                <p className="text-xs font-bold text-red-700 uppercase">Special Instruction:</p>
+                <p className="text-sm text-red-900 font-medium">{ticket.adminNotes}</p>
+            </div>
+        )}
 
         <div className="mt-4 space-y-3 text-sm text-gray-700">
           <p><strong className="text-gray-500">Complaint:</strong> {ticket.complaint}</p>

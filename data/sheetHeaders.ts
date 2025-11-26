@@ -1,5 +1,4 @@
 
-
 // IMPORTANT: The order of these headers must exactly match the order of columns in your Google Sheets.
 
 // Headers for Sheet 1: The sheet where new complaints are initially logged.
@@ -14,7 +13,8 @@ export const COMPLAINT_SHEET_HEADERS = [
   'Service Category',
   'Complaint',
   'Assigned Technician',
-  'Status'
+  'Status',
+  'Admin Notes' // New Column
 ];
 
 // Headers for Sheet 2: The master sheet where completed job details are logged.

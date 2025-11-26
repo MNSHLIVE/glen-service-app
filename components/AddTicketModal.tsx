@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Ticket } from '../types';
@@ -17,6 +18,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
   const [technicianId, setTechnicianId] = useState(technicians[0]?.id || '');
   const [serviceCategory, setServiceCategory] = useState(initialData?.serviceCategory || '');
   const [preferredTime, setPreferredTime] = useState('10AM-12PM');
+  const [adminNotes, setAdminNotes] = useState('');
 
   useEffect(() => {
     if (initialData) {
@@ -43,6 +45,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
       technicianId,
       serviceCategory,
       preferredTime,
+      adminNotes,
       productDetails: {
         make: 'Glen',
         segment: '',
@@ -102,6 +105,16 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
                     <select value={technicianId} onChange={e => setTechnicianId(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-glen-blue focus:border-glen-blue sm:text-sm rounded-md">
                         {technicians.map(tech => <option key={tech.id} value={tech.id}>{tech.name}</option>)}
                     </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-red-600">Admin Notes / Special Instructions</label>
+                    <input 
+                        type="text" 
+                        value={adminNotes} 
+                        onChange={e => setAdminNotes(e.target.value)} 
+                        placeholder="e.g. Collect Pending Payment of 500rs"
+                        className="mt-1 block w-full px-3 py-2 border border-red-200 bg-red-50 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500" 
+                    />
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
                     <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>

@@ -15,6 +15,15 @@ export enum WebhookStatus {
   Simulating = 'Simulating',
 }
 
+export enum UrgentAlertType {
+  VehicleBreakdown = 'Vehicle Breakdown',
+  PaymentIssue = 'Payment/Discount Approval',
+  PartUnavailable = 'Part Unavailable',
+  CustomerDispute = 'Customer Dispute',
+  CallMe = 'Call Me Urgently',
+  Other = 'Other'
+}
+
 export interface User {
   id: string;
   name: string;
@@ -102,6 +111,7 @@ export interface Ticket {
   partsReplaced?: ReplacedPart[];
   pointsAwarded?: boolean; // Flag to check if points have been given for this ticket
   freeService?: boolean; // New field for free service tracking
+  adminNotes?: string; // Special instructions from Admin
 }
 
 export interface Feedback {

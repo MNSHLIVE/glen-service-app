@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Ticket, TicketStatus } from '../types';
 import JobCard from './JobCard';
+import TechnicianSupportModal from './TechnicianSupportModal';
 
 interface TechnicianViewProps {
     onViewTicket: (ticketId: string) => void;
@@ -12,6 +13,7 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
   const { user, tickets, logout, technicians, syncTickets, isSyncing, lastSyncTime, markAttendance } = useAppContext();
   const [filter, setFilter] = useState<TicketStatus | 'All'>('All');
   const [isOnDuty, setIsOnDuty] = useState(false);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const currentTechnician = technicians.find(t => t.id === user?.id);
   const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
@@ -49,7 +51,7 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
   };
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-16">
       <div className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Welcome, {user?.name}!</h2>
@@ -126,6 +128,19 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
           <p className="text-xs mt-2 text-gray-400">The list updates automatically.</p>
         </div>
       )}
+
+      {/* Floating SOS Button */}
+      <button 
+        onClick={() => setIsSupportModalOpen(true)}
+        className="fixed bottom-6 right-6 bg-red-600 text-white p-4 rounded-full shadow-xl hover:bg-red-700 transition-colors z-40 flex items-center justify-center"
+        title="Emergency / Support"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      </button>
+
+      {isSupportModalOpen && <TechnicianSupportModal onClose={() => setIsSupportModalOpen(false)} />}
     </div>
   );
 };

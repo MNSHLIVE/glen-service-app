@@ -10,7 +10,7 @@ type SettingsTab = 'automation' | 'technicians';
 // --- Reusable Payload Manager Component ---
 const PayloadManager: React.FC<{
     title: string;
-    action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE';
+    action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE' | 'URGENT_ALERT';
     defaultHeaders: string[];
     webhookUrlOverride: string;
 }> = ({ title, action, defaultHeaders, webhookUrlOverride }) => {
@@ -32,6 +32,7 @@ const PayloadManager: React.FC<{
             'Status': 'New',
             'Service Booking Date': now.toISOString(),
             'Preferred Time': '12PM-03PM',
+            'Admin Notes': 'Test Note',
         };
 
         if (action === 'JOB_COMPLETED') {
@@ -51,7 +52,7 @@ const PayloadManager: React.FC<{
 
         if (action === 'ATTENDANCE') {
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-            const attendanceData = {
+            const attendanceData: any = {
                 [ATTENDANCE_SHEET_HEADERS[0]]: 'tech-test',
                 [ATTENDANCE_SHEET_HEADERS[1]]: 'Test Technician',
                 [ATTENDANCE_SHEET_HEADERS[2]]: 'Clock In',
@@ -69,6 +70,27 @@ const PayloadManager: React.FC<{
                 };
             });
             return finalPayload;
+        }
+
+        if (action === 'URGENT_ALERT') {
+             const alertData: any = {
+                 technicianId: 'tech-test',
+                 technicianName: 'Test Technician',
+                 alertType: 'Vehicle Breakdown',
+                 comments: 'Tyre punctured, running late',
+                 timestamp: now.toLocaleString()
+             };
+             // Urgent alerts don't have sheet headers defined in constants, manual map
+             const keys = Object.keys(alertData);
+             const finalPayload = keys.map((key) => {
+                 const id = nextId.current++;
+                 return {
+                    id: id,
+                    key: key,
+                    value: alertData[key]
+                 }
+             });
+             return finalPayload;
         }
         
         const finalPayload = defaultHeaders.map((header) => {
@@ -166,8 +188,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('automation');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const { technicians: contextTechnicians, addTechnician, updateTechnician, deleteTechnician, user, webhookStatus, checkWebhookHealth } = useAppContext();
+  const { technicians, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, user, webhookStatus, checkWebhookHealth } = useAppContext();
   const { addToast } = useToast();
 
   const isDeveloper = user?.role === UserRole.Developer;
@@ -177,13 +198,12 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useEffect(() => {
     setWebhookUrl(localStorage.getItem('masterWebhookUrl') || '');
     setGoogleSheetUrl(localStorage.getItem('googleSheetUrl') || '');
-    setTechnicians(contextTechnicians);
     
     // Default to technicians tab if not allowed full access
     if (!hasFullAccess) {
         setActiveTab('technicians');
     }
-  }, [contextTechnicians, hasFullAccess]);
+  }, [hasFullAccess]);
 
   const handleSaveAndClose = () => {
     if (hasFullAccess) {
@@ -347,6 +367,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
             <PayloadManager title="New Ticket" action="NEW_TICKET" defaultHeaders={COMPLAINT_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
             <PayloadManager title="Job Completed" action="JOB_COMPLETED" defaultHeaders={TECHNICIAN_UPDATE_HEADERS} webhookUrlOverride={webhookUrl} />
             <PayloadManager title="Attendance" action="ATTENDANCE" defaultHeaders={ATTENDANCE_SHEET_HEADERS} webhookUrlOverride={webhookUrl} />
+            <PayloadManager title="Urgent Alert (WhatsApp)" action="URGENT_ALERT" defaultHeaders={[]} webhookUrlOverride={webhookUrl} />
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus } from '../types';
+import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
 import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS, ATTENDANCE_SHEET_HEADERS } from '../data/sheetHeaders';
@@ -26,10 +26,11 @@ interface AppContextType {
   resetTechniciansToDefaults: () => void;
   sendReceipt: (ticketId: string) => void;
   markAttendance: (status: 'Clock In' | 'Clock Out') => void;
+  sendUrgentAlert: (type: UrgentAlertType, comments: string) => void;
   resetAllTechnicianPoints: () => void;
   syncTickets: (isBackground?: boolean) => Promise<void>;
   checkWebhookHealth: (urlOverride?: string) => Promise<void>;
-  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>, urlOverride?: string) => void;
+  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE' | 'URGENT_ALERT', payload: Record<string, any>, urlOverride?: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -56,6 +57,7 @@ const createDummyTicket = (): Ticket => ({
     serviceChecklist: { amcDiscussion: true },
     freeService: false,
     pointsAwarded: true,
+    adminNotes: 'This is a test note.',
 });
 
 
@@ -73,7 +75,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     try {
       // --- CONFIGURATION PERSISTENCE CHECK ---
-      // If config.ts has values, force them into localStorage so they stick
       if (APP_CONFIG.MASTER_WEBHOOK_URL) {
           localStorage.setItem('masterWebhookUrl', APP_CONFIG.MASTER_WEBHOOK_URL);
       }
@@ -82,17 +83,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       // Load Technicians
+      // 1. Start with hardcoded constants
+      let initialTechs = [...TECHNICIANS];
+      
+      // 2. Add any technicians from config.ts (if provided)
+      if (APP_CONFIG.TECHNICIANS && Array.isArray(APP_CONFIG.TECHNICIANS)) {
+          // @ts-ignore
+          const configTechs = APP_CONFIG.TECHNICIANS.map(t => ({ ...t, points: 0 }));
+          // Merge avoiding duplicates by ID
+          configTechs.forEach((ct: Technician) => {
+              if (!initialTechs.some(it => it.id === ct.id)) {
+                  initialTechs.push(ct);
+              }
+          });
+      }
+
+      // 3. Load from LocalStorage (to preserve points)
       const savedTechs = localStorage.getItem('technicians');
-      let initialTechs = TECHNICIANS;
       if (savedTechs) {
         const parsedTechs = JSON.parse(savedTechs);
         if (Array.isArray(parsedTechs)) {
-            // Ensure test tech exists, add if missing
-            if (!parsedTechs.some((t: Technician) => t.id === 'tech-test')) {
-                const testTech = TECHNICIANS.find(t => t.id === 'tech-test');
-                if (testTech) parsedTechs.push(testTech);
-            }
-            initialTechs = parsedTechs;
+             // Merge saved points into the master list
+             initialTechs = initialTechs.map(tech => {
+                 const saved = parsedTechs.find((p: Technician) => p.id === tech.id);
+                 return saved ? { ...tech, points: saved.points, name: saved.name, password: saved.password } : tech;
+             });
+             
+             // Add any locally added techs that aren't in config
+             parsedTechs.forEach((pt: Technician) => {
+                 if (!initialTechs.some(it => it.id === pt.id)) {
+                     initialTechs.push(pt);
+                 }
+             });
         }
       }
       setTechnicians(initialTechs);
@@ -145,9 +167,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Effect for saving technicians to localStorage whenever they change
   useEffect(() => {
-    if (technicians.length > 0) {
-        localStorage.setItem('technicians', JSON.stringify(technicians));
-    }
+    // FIX: Save even if empty, to handle deletions correctly
+    localStorage.setItem('technicians', JSON.stringify(technicians));
   }, [technicians]);
 
 
@@ -160,7 +181,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (webhookUrl) {
           if (action !== 'HEALTH_CHECK') {
-             // Only set to checking if not a health check to avoid UI flicker on manual tests
              setWebhookStatus(WebhookStatus.Checking);
           }
           try {
@@ -169,7 +189,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
-                      // Removed X-App-Source to reduce CORS preflight issues
                   },
                   body: JSON.stringify(finalPayload),
               });
@@ -188,7 +207,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setWebhookStatus(WebhookStatus.Error);
               console.error(`[AUTOMATION] Error sending data to webhook for action ${action}:`, error);
               
-              // More descriptive error handling
               let errorMsg = 'Failed to send webhook.';
               if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
                   const isHttps = window.location.protocol === 'https:';
@@ -230,8 +248,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (response.ok) {
         setWebhookStatus(WebhookStatus.Connected);
-        
-        // Try to parse for perfect configuration, but don't fail if just connected
         try {
             const data = JSON.parse(responseText);
             if (data.status === 'ok') {
@@ -240,7 +256,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  addToast('Connected! (n8n received the signal)', 'success');
             }
         } catch (e) {
-            // Not JSON, likely just a 200 OK text response. This is fine for connectivity.
             console.log("[HEALTH CHECK] Non-JSON response (200 OK):", responseText);
             addToast('Connected! (n8n received the signal)', 'success');
         }
@@ -260,8 +275,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE', payload: Record<string, any>, urlOverride?: string) => {
-     // Send payload directly (flat), do not wrap in 'data'
+  const sendCustomWebhookPayload = (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE' | 'URGENT_ALERT', payload: Record<string, any>, urlOverride?: string) => {
      sendWebhook(
         action,
         payload,
@@ -317,7 +331,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const responseText = await response.text();
       
-      // For Sync, we DO expect data back, so we keep the check stricter than Health Check
       if ((responseText.includes('Accepted') || responseText.includes('Workflow started')) && responseText.length < 100) {
          throw new Error("n8n accepted command but sent no data. Add 'Respond to Webhook' node to Path 3.");
       }
@@ -380,6 +393,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 },
                 freeService: row['Free Service'] === 'true' || row['Free Service'] === true,
                 partsReplaced: parts,
+                adminNotes: row['Admin Notes'] || '',
             };
             return {
                 ...ticket,
@@ -435,6 +449,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       [COMPLAINT_SHEET_HEADERS[8]]: newTicket.complaint,
       [COMPLAINT_SHEET_HEADERS[9]]: technician?.name || 'Unassigned',
       [COMPLAINT_SHEET_HEADERS[10]]: newTicket.status,
+      [COMPLAINT_SHEET_HEADERS[11]]: newTicket.adminNotes || '',
     };
 
     // Send flattened payload
@@ -562,6 +577,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteTechnician = (techId: string) => {
       const updatedTechs = technicians.filter(t => t.id !== techId);
       setTechnicians(updatedTechs);
+      // Explicitly save to localStorage immediately to handle empty array case
+      localStorage.setItem('technicians', JSON.stringify(updatedTechs));
       addToast('Technician removed successfully!', 'success');
   }
 
@@ -594,7 +611,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
       if (!user) return;
       const now = new Date();
-      // Format time as "09:00 AM"
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
       const attendancePayload = {
@@ -603,7 +619,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           [ATTENDANCE_SHEET_HEADERS[2]]: status,
           [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
           [ATTENDANCE_SHEET_HEADERS[4]]: now.toISOString(),
-          // Conditionally fill Check In or Check Out based on the action
           [ATTENDANCE_SHEET_HEADERS[5]]: status === 'Clock In' ? timeString : '', 
           [ATTENDANCE_SHEET_HEADERS[6]]: status === 'Clock Out' ? timeString : '',
       };
@@ -612,6 +627,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           'ATTENDANCE',
           attendancePayload,
           `[AUTOMATION] Trigger: Attendance ${status} for ${user.name}`
+      );
+  };
+
+  const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
+      if (!user) return;
+      const alertPayload = {
+          technicianId: user.id,
+          technicianName: user.name,
+          alertType: type,
+          comments: comments,
+          timestamp: new Date().toLocaleString()
+      };
+      
+      sendWebhook(
+          'URGENT_ALERT',
+          alertPayload,
+          `[AUTOMATION] Urgent Alert: ${type}`
       );
   };
 
@@ -624,7 +656,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime };
 
   return (
     <AppContext.Provider value={contextValue}>
