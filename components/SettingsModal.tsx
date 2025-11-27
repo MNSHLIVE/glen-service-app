@@ -57,9 +57,8 @@ const PayloadManager: React.FC<{
                 [ATTENDANCE_SHEET_HEADERS[1]]: 'Test Technician',
                 [ATTENDANCE_SHEET_HEADERS[2]]: 'Clock In',
                 [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
-                [ATTENDANCE_SHEET_HEADERS[4]]: now.toISOString(),
-                [ATTENDANCE_SHEET_HEADERS[5]]: timeString, // Check In Time
-                [ATTENDANCE_SHEET_HEADERS[6]]: '', // Check Out Time
+                [ATTENDANCE_SHEET_HEADERS[4]]: timeString, // Check In Time
+                [ATTENDANCE_SHEET_HEADERS[5]]: '', // Check Out Time
             }
              const finalPayload = defaultHeaders.map((header) => {
                  const id = nextId.current++;
@@ -357,7 +356,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({
                    <p className="font-bold text-yellow-800 mb-1">Attendance Sheet Setup</p>
                     <ul className="list-disc list-inside space-y-1 mt-1 text-yellow-900 text-xs">
                        <li>Create a 3rd Sheet named <strong>Attendance</strong>.</li>
-                       <li>Add columns: <strong>Technician ID, Technician Name, Attendance Status, Timestamp, Timestamp ISO, Check In Time, Check Out Time</strong></li>
+                       <li>Add columns: <strong>TechnicianId, Technician Name, AttendanceStatus, Timestamp, CheckIn, CheckOut</strong></li>
                        <li>The app sends ONE row per action (Clock In / Clock Out).</li>
                    </ul>
                </div>

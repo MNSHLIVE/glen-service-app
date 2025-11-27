@@ -638,9 +638,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           [ATTENDANCE_SHEET_HEADERS[1]]: user.name,
           [ATTENDANCE_SHEET_HEADERS[2]]: status,
           [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
-          [ATTENDANCE_SHEET_HEADERS[4]]: now.toISOString(),
-          [ATTENDANCE_SHEET_HEADERS[5]]: status === 'Clock In' ? timeString : '', 
-          [ATTENDANCE_SHEET_HEADERS[6]]: status === 'Clock Out' ? timeString : '',
+          // Index 4 is now CheckIn (previously it was 5, 4 was ISO)
+          [ATTENDANCE_SHEET_HEADERS[4]]: status === 'Clock In' ? timeString : '', 
+          // Index 5 is now CheckOut (previously it was 6)
+          [ATTENDANCE_SHEET_HEADERS[5]]: status === 'Clock Out' ? timeString : '',
       };
 
       sendWebhook(

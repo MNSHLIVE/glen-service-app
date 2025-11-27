@@ -40,13 +40,12 @@ export const TECHNICIAN_UPDATE_HEADERS = [
 ];
 
 // Headers for Sheet 3: Attendance Logging
-// UPDATED: Strictly matching the user's screenshot headers (No spaces in ID/Status/CheckIn/Out)
+// UPDATED: Strictly matching the user's screenshot headers (No TimestampISO)
 export const ATTENDANCE_SHEET_HEADERS = [
   'TechnicianId',      // Matches Col A
   'Technician Name',   // Matches Col B
   'AttendanceStatus',  // Matches Col C
   'Timestamp',         // Matches Col D
-  'TimestampISO',      // Col E (Hidden/System)
-  'CheckIn',           // Matches Col F
-  'CheckOut'           // Matches Col G
+  'CheckIn',           // Matches Col E
+  'CheckOut'           // Matches Col F
 ];
