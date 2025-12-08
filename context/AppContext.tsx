@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
 import { TECHNICIANS } from '../constants';
@@ -640,15 +641,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const now = new Date();
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
+      // HARDCODED KEYS to match sheet strictly (Safe from indexing errors)
       const attendancePayload = {
-          [ATTENDANCE_SHEET_HEADERS[0]]: user.id,
-          [ATTENDANCE_SHEET_HEADERS[1]]: user.name,
-          [ATTENDANCE_SHEET_HEADERS[2]]: status,
-          [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
-          // Index 4 is now CheckIn (previously it was 5, 4 was ISO)
-          [ATTENDANCE_SHEET_HEADERS[4]]: status === 'Clock In' ? timeString : '', 
-          // Index 5 is now CheckOut (previously it was 6)
-          [ATTENDANCE_SHEET_HEADERS[5]]: status === 'Clock Out' ? timeString : '',
+          "TechnicianId": user.id,
+          "Technician Name": user.name,
+          "AttendanceStatus": status,
+          "Timestamp": now.toLocaleString(),
+          "CheckIn": status === 'Clock In' ? timeString : '',
+          "CheckOut": status === 'Clock Out' ? timeString : '',
       };
 
       sendWebhook(

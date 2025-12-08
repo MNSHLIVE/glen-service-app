@@ -52,20 +52,21 @@ const PayloadManager: React.FC<{
 
         if (action === 'ATTENDANCE') {
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            // FORCE EXPLICIT KEYS to match AppContext logic
             const attendanceData: any = {
-                [ATTENDANCE_SHEET_HEADERS[0]]: 'tech-test',
-                [ATTENDANCE_SHEET_HEADERS[1]]: 'Test Technician',
-                [ATTENDANCE_SHEET_HEADERS[2]]: 'Clock In',
-                [ATTENDANCE_SHEET_HEADERS[3]]: now.toLocaleString(),
-                [ATTENDANCE_SHEET_HEADERS[4]]: timeString, // Check In Time
-                [ATTENDANCE_SHEET_HEADERS[5]]: '', // Check Out Time
+                "TechnicianId": 'tech-test',
+                "Technician Name": 'Test Technician',
+                "AttendanceStatus": 'Clock In',
+                "Timestamp": now.toLocaleString(),
+                "CheckIn": timeString,
+                "CheckOut": '',
             }
-             const finalPayload = defaultHeaders.map((header) => {
+             const finalPayload = Object.keys(attendanceData).map((key) => {
                  const id = nextId.current++;
                  return {
                     id: id,
-                    key: header,
-                    value: attendanceData[header] ?? '',
+                    key: key,
+                    value: attendanceData[key] ?? '',
                 };
             });
             return finalPayload;
