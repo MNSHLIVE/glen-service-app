@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
 import { TECHNICIANS } from '../constants';
@@ -32,6 +31,7 @@ interface AppContextType {
   syncTickets: (isBackground?: boolean) => Promise<void>;
   checkWebhookHealth: (urlOverride?: string) => Promise<void>;
   sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE' | 'URGENT_ALERT', payload: Record<string, any>, urlOverride?: string) => void;
+  refreshData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -447,12 +447,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addTicket = (ticketData: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => {
+    // Override product make from config if available
+    const make = APP_CONFIG.BRANDING?.defaultProductMake || 'Glen';
+    
     const newTicket: Ticket = {
         ...ticketData,
         id: `SB/${new Date().getFullYear()}/${new Date().getMonth()+1}/DL/${Math.floor(Math.random() * 900000) + 100000}`,
         status: TicketStatus.New,
         createdAt: new Date(),
         serviceBookingDate: new Date(),
+        productDetails: {
+            ...ticketData.productDetails,
+            make: make
+        }
     }
     setTickets(prev => [newTicket, ...prev]);
     const technician = technicians.find(t => t.id === newTicket.technicianId);
@@ -686,7 +693,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }
 
 
-  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime, isAppLoading };
+  const contextValue = { user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, addFeedback, uploadDamagedPart, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, isSyncing, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload, lastSyncTime, isAppLoading, refreshData };
 
   return (
     <AppContext.Provider value={contextValue}>

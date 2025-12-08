@@ -1,14 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { UserRole, Ticket, TicketStatus, ServiceChecklist, ReplacedPart, PaymentStatus } from '../types';
 import AddPartModal from './UpdateJobModal';
+import { APP_CONFIG } from '../config';
 
-// Receipt Modal (No Changes)
+// Receipt Modal
 const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticket, onClose }) => {
     const { technicians, sendReceipt } = useAppContext();
     const [isSending, setIsSending] = useState(false);
     
     const technician = technicians.find(t => t.id === ticket.technicianId);
+    const { BRANDING } = APP_CONFIG;
 
     const handleSend = () => {
         setIsSending(true);
@@ -24,8 +27,8 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
             <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-full overflow-y-auto">
                 <div className="p-6">
                     <div className="text-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Pandit Glen Service</h2>
-                        <p className="text-sm text-gray-500">Your Trusted Appliance Experts</p>
+                        <h2 className="text-2xl font-bold text-gray-900">{BRANDING?.companyName || 'Pandit Glen Service'}</h2>
+                        <p className="text-sm text-gray-500">{BRANDING?.tagline || 'Your Trusted Appliance Experts'}</p>
                     </div>
                     <div className="text-center border-b border-t py-2 mb-6">
                         <h3 className="text-xl font-semibold text-gray-800 uppercase">Payment Receipt</h3>
@@ -86,7 +89,7 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
                         </div>
                          <div className="text-center text-xs text-gray-500 pt-4">
                             <p>Serviced by: {technician?.name}</p>
-                            <p>Thank you for choosing Pandit Glen Service!</p>
+                            <p>Thank you for choosing {BRANDING?.companyName || 'Pandit Glen Service'}!</p>
                         </div>
                     </div>
                      <div className="flex justify-end space-x-3 pt-6">

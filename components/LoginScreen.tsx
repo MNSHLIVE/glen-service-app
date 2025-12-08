@@ -1,13 +1,15 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { UserRole } from '../types';
+import { APP_CONFIG } from '../config';
 
 // Technicians & Lower roles use PINs
 const CONTROLLER_PIN = '555';
 const COORDINATOR_PIN = '777';
 
-// Admin & Developer Credentials (HARDCODED SECURE DEFAULTS)
-const CREDENTIALS = {
+// Default Fallback Credentials (Secure defaults if config missing)
+const DEFAULT_CREDENTIALS = {
     admin: {
         username: 'admin',
         password: 'PanditAdmin@2025',
@@ -44,6 +46,18 @@ const LoginScreen: React.FC = () => {
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   
   const { login, technicians } = useAppContext();
+  
+  // Determine active credentials (Config vs Defaults)
+  const CREDENTIALS = {
+      admin: {
+          ...DEFAULT_CREDENTIALS.admin,
+          ...(APP_CONFIG.DEFAULT_CREDENTIALS?.admin || {})
+      },
+      developer: {
+          ...DEFAULT_CREDENTIALS.developer,
+          ...(APP_CONFIG.DEFAULT_CREDENTIALS?.developer || {})
+      }
+  };
 
   useEffect(() => {
     const storedLockout = localStorage.getItem('loginLockoutUntil');

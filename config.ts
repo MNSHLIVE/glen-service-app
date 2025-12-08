@@ -17,5 +17,22 @@ export const APP_CONFIG = {
     // Format: { id: 'techX', name: 'Name', password: '123' }
     TECHNICIANS: [
        // Example: { id: 'tech1', name: 'Anil Kumar', password: '123' },
-    ]
+    ],
+
+    // 4. Branding Configuration (White Labeling)
+    BRANDING: {
+        appNamePrefix: "Pandit",
+        appNameSuffix: "Glen Service",
+        logoColor: "#007aff", // Tailwind 'glen-blue'
+        companyName: "Pandit Glen Service",
+        tagline: "Your Trusted Appliance Experts",
+        defaultProductMake: "Glen"
+    },
+
+    // 5. Default Credentials (Optional Override)
+    // If removed, hardcoded defaults in LoginScreen will be used.
+    DEFAULT_CREDENTIALS: {
+        admin: { username: "admin", password: "PanditAdmin@2025" },
+        developer: { username: "dev", password: "GlenMaster@888" }
+    }
 };
