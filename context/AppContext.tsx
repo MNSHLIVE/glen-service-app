@@ -20,7 +20,7 @@ interface AppContextType {
   updateTicket: (updatedTicket: Ticket) => void;
   uploadDamagedPart: (ticketId: string, imageData: string) => void;
   addFeedback: (feedbackItem: Feedback) => void;
-  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => void;
+  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => boolean;
   updateTechnician: (updatedTech: Technician) => void;
   deleteTechnician: (techId: string) => void;
   resetTechniciansToDefaults: () => void;
@@ -205,15 +205,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const updated = technicians.filter(t => t.id !== id);
       setTechnicians(updated);
       localStorage.setItem('technicians', JSON.stringify(updated));
-      addToast('Technician removed.', 'success');
+      addToast('Technician removed successfully.', 'success');
   };
 
-  const addTechnician = (tech: any) => {
+  const addTechnician = (tech: any): boolean => {
+    // SECURITY: Prevent duplicate PINs
+    if (technicians.some(t => t.password === tech.password)) {
+        addToast(`Error: PIN ${tech.password} is already used by another technician.`, 'error');
+        return false;
+    }
+
     const newTech = { ...tech, id: `tech${Date.now()}`, points: 0 };
     const updated = [...technicians, newTech];
     setTechnicians(updated);
     localStorage.setItem('technicians', JSON.stringify(updated));
-    addToast(`${tech.name} Saved Locally!`, 'success');
+    addToast(`${tech.name} Registered Successfully!`, 'success');
+    return true;
   };
 
   const refreshData = () => window.location.reload();

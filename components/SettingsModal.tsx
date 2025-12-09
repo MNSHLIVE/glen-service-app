@@ -39,8 +39,18 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             alert("Please enter Name and PIN");
             return;
         }
-        addTechnician(newTech);
-        setNewTech({name: '', password: ''});
+        
+        // Only clear the form if the PIN was unique and saving succeeded
+        const success = addTechnician(newTech);
+        if (success) {
+            setNewTech({ name: '', password: '' });
+        }
+    };
+
+    const handleDeleteClick = (techId: string, name: string) => {
+        if (window.confirm(`WARNING: This will permanently remove ${name}. Are you sure?`)) {
+            deleteTechnician(techId);
+        }
     };
 
     return (
@@ -56,21 +66,23 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 
                 <div className="p-6 overflow-y-auto space-y-6 bg-white">
                     <div className="space-y-3">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Staff List</h4>
                         {technicians.length === 0 ? (
-                            <p className="text-center py-4 text-gray-400 italic">No technicians added.</p>
+                            <p className="text-center py-8 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">No technicians added.</p>
                         ) : (
                             technicians.map(tech => (
                                 <div key={tech.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 shadow-sm transition-all hover:border-glen-blue/30">
                                     <div className="flex items-center space-x-3">
                                         <PresenceDot lastSeen={tech.lastSeen} />
                                         <div>
-                                            <p className="font-bold text-gray-800">{tech.name}</p>
-                                            <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">PIN: {tech.password} • PTS: {tech.points}</p>
+                                            <p className="font-bold text-gray-800 leading-tight">{tech.name}</p>
+                                            <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">PIN: {tech.password} • PTS: {tech.points}</p>
                                         </div>
                                     </div>
                                     <button 
-                                        onClick={() => { if(confirm(`Remove ${tech.name}?`)) deleteTechnician(tech.id); }} 
+                                        onClick={() => handleDeleteClick(tech.id, tech.name)} 
                                         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Remove Technician"
                                     >
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
@@ -86,7 +98,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             </span>
                             Register New Technician
                         </h4>
-                        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-4">
+                        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-4 shadow-inner">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
@@ -98,12 +110,14 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">3 or 4 Digit PIN</label>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Unique Staff PIN</label>
                                     <input 
-                                        placeholder="e.g., 123" 
+                                        type="tel"
+                                        placeholder="3 or 4 Digit PIN" 
                                         value={newTech.password} 
-                                        onChange={e => setNewTech({...newTech, password: e.target.value})}
-                                        className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-glen-blue/20 outline-none transition-all"
+                                        onChange={e => setNewTech({...newTech, password: e.target.value.replace(/\D/g, '')})}
+                                        maxLength={4}
+                                        className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-glen-blue/20 outline-none transition-all"
                                     />
                                 </div>
                             </div>
