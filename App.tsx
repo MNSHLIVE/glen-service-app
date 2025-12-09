@@ -1,16 +1,16 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import TechnicianView from './components/TechnicianView';
-import TicketDetails from './components/Reports'; // Reports.tsx is repurposed as TicketDetails
+import TicketDetails from './components/Reports'; 
+import DiagnosticModal from './components/DiagnosticModal';
 import { UserRole } from './types';
 import ToastContainer from './components/Toast';
 import InstallPrompt from './components/InstallPrompt';
 import { APP_CONFIG } from './config';
 
-const Logo: React.FC = () => {
+const Logo: React.FC<{ onVersionTap?: () => void }> = ({ onVersionTap }) => {
     const { BRANDING } = APP_CONFIG;
     return (
       <div className="flex items-center space-x-2">
@@ -21,6 +21,7 @@ const Logo: React.FC = () => {
         </svg>
         <h1 className="text-xl font-bold" style={{ color: BRANDING?.logoColor || '#007aff' }}>
           {BRANDING?.appNamePrefix || 'Pandit'} <span className="font-light text-gray-700">{BRANDING?.appNameSuffix || 'Glen Service'}</span>
+          <span onClick={onVersionTap} className="ml-2 text-[10px] text-gray-300 font-mono cursor-pointer select-none">v4.6.1</span>
         </h1>
       </div>
     );
@@ -30,6 +31,16 @@ const Logo: React.FC = () => {
 const App: React.FC = () => {
   const { user, isAppLoading } = useAppContext();
   const [viewingTicketId, setViewingTicketId] = useState<string | null>(null);
+  const [diagnosticTaps, setDiagnosticTaps] = useState(0);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const handleVersionTap = () => {
+      setDiagnosticTaps(prev => prev + 1);
+      if (diagnosticTaps >= 4) { // 5 taps
+          setShowDiagnostics(true);
+          setDiagnosticTaps(0);
+      }
+  };
 
   const handleViewTicket = (ticketId: string) => {
     setViewingTicketId(ticketId);
@@ -45,7 +56,7 @@ const App: React.FC = () => {
              <div className="animate-pulse">
                 <Logo />
              </div>
-             <p className="mt-4 text-gray-400 text-sm">Starting up...</p>
+             <p className="mt-4 text-gray-400 text-sm">Initializing launch sequence...</p>
           </div>
       )
   }
@@ -74,13 +85,14 @@ const App: React.FC = () => {
     <div className="min-h-screen font-sans flex flex-col">
       <ToastContainer />
       <InstallPrompt />
-      {/* Header: Sticky with safe-area padding support via standard css */}
+      {showDiagnostics && <DiagnosticModal onClose={() => setShowDiagnostics(false)} />}
+      
       <header className="bg-white/70 backdrop-blur-sm shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
-          <Logo />
+          <Logo onVersionTap={handleVersionTap} />
         </div>
       </header>
-      {/* Main content: Flex grow to fill space, with padding for mobile */}
+
       <main className="flex-grow max-w-4xl mx-auto w-full p-4 pb-24 sm:pb-4">
         {renderContent()}
       </main>
