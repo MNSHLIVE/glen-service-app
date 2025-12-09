@@ -14,7 +14,7 @@ export const COMPLAINT_SHEET_HEADERS = [
   'Complaint',
   'Assigned Technician',
   'Status',
-  'Admin Notes' // New Column
+  'Admin Notes'
 ];
 
 // Headers for Sheet 2: The master sheet where completed job details are logged.
@@ -40,12 +40,20 @@ export const TECHNICIAN_UPDATE_HEADERS = [
 ];
 
 // Headers for Sheet 3: Attendance Logging
-// UPDATED: Strictly matching the user's screenshot headers (No TimestampISO)
 export const ATTENDANCE_SHEET_HEADERS = [
-  'TechnicianId',      // Matches Col A
-  'Technician Name',   // Matches Col B
-  'AttendanceStatus',  // Matches Col C
-  'Timestamp',         // Matches Col D
-  'CheckIn',           // Matches Col E
-  'CheckOut'           // Matches Col F
+  'TechnicianId',
+  'Technician Name',
+  'AttendanceStatus',
+  'Timestamp',
+  'CheckIn',
+  'CheckOut'
+];
+
+// Headers for Sheet 4: Real-time Presence tracking (New)
+// Create a tab named "Presence" in your sheet.
+export const PRESENCE_SHEET_HEADERS = [
+  'Technician ID',    // Col A
+  'Technician Name',  // Col B
+  'App Version',      // Col C
+  'Last Seen'         // Col D (Timestamp)
 ];

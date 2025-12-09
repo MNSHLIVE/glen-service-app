@@ -3,10 +3,8 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
 import { TECHNICIANS } from '../constants';
 import { useToast } from './ToastContext';
-import { COMPLAINT_SHEET_HEADERS, TECHNICIAN_UPDATE_HEADERS, ATTENDANCE_SHEET_HEADERS } from '../data/sheetHeaders';
-import { APP_CONFIG } from '../config';
-
-const APP_VERSION = '4.6.2'; // Matches App.tsx
+import { PRESENCE_SHEET_HEADERS } from '../data/sheetHeaders';
+import { APP_CONFIG, APP_VERSION } from '../config';
 
 interface AppContextType {
   user: User | null;
@@ -93,7 +91,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-      }).catch(() => {}); // Fail silently for heartbeat
+      }).catch(() => {}); 
   }, [user]);
 
   useEffect(() => {
@@ -115,10 +113,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (savedTechs) {
         const parsedTechs = JSON.parse(savedTechs);
         if (Array.isArray(parsedTechs)) {
-             initialTechs = initialTechs.map(tech => {
-                 const saved = parsedTechs.find((p: Technician) => p.id === tech.id);
-                 return saved ? { ...tech, points: saved.points, name: saved.name, lastSeen: saved.lastSeen ? new Date(saved.lastSeen) : undefined } : tech;
-             });
+             initialTechs = parsedTechs.map((t: any) => ({
+                 ...t,
+                 lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
+             }));
         }
       }
       setTechnicians(initialTechs);
@@ -184,7 +182,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (response.ok) {
         const data = await response.json();
-        // Update presence from n8n if included
         if (data.technicianStatuses && Array.isArray(data.technicianStatuses)) {
             setTechnicians(prev => prev.map(tech => {
                 const status = data.technicianStatuses.find((s: any) => s.id === tech.id);
@@ -193,7 +190,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         
         if (data.tickets) {
-            // Mapping logic remains same as before...
             setTickets(data.tickets);
         }
         setLastSyncTime(new Date());
@@ -207,7 +203,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = (loggedInUser: User) => {
       setUser(loggedInUser);
       localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
-      sendHeartbeat(); // Immediate heartbeat on login
+      sendHeartbeat();
   };
   
   const logout = () => {

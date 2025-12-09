@@ -9,9 +9,7 @@ import DiagnosticModal from './components/DiagnosticModal';
 import { UserRole } from './types';
 import ToastContainer from './components/Toast';
 import InstallPrompt from './components/InstallPrompt';
-import { APP_CONFIG } from './config';
-
-const APP_VERSION = '4.6.2';
+import { APP_CONFIG, APP_VERSION } from './config';
 
 const Logo: React.FC<{ onVersionTap?: () => void }> = ({ onVersionTap }) => {
     const { BRANDING } = APP_CONFIG;
@@ -52,7 +50,7 @@ const App: React.FC = () => {
       }
   };
 
-  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center font-sans text-glen-blue font-bold">Initializing Pandit Glen...</div>;
 
   const renderContent = () => {
     if (!user) return <LoginScreen />;
@@ -75,7 +73,8 @@ const App: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
           <Logo onVersionTap={handleVersionTap} />
           {user && (
-            <div className="text-xs text-gray-400 font-mono">
+            <div className="text-xs text-gray-400 font-mono flex items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-2 animate-pulse"></span>
                 {user.role} online
             </div>
           )}
