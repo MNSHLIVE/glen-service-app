@@ -2,25 +2,29 @@
 # Pandit Glen Service App - Documentation
 
 **Version:** 4.6.3
-**System Health Monitor:** Built-in
+**System Health Monitor:** Built-in (badge on Dashboard)
 
 ---
 
-## 🚀 Data Flow: How it works
-1. **Adding Technicians:** When you add a technician in Settings, they are saved locally to YOUR app. When that technician logs in on their phone, the app sends a `HEARTBEAT` to n8n, which records them as "Active" in the `Presence` tab of your sheet.
-2. **Heartbeat:** Every 2 minutes, technicians "ping" n8n. This updates the Green Dot in your Admin view.
+## 🚀 How Data is Handled
+### 1. Local Memory (Speed)
+When you add a technician or fill a ticket, the app saves it **locally** on your phone instantly. This means you don't have to wait for the internet for basic operations.
+*   **Technician Save:** When you click "Save Technician," they are stored in YOUR local list. To sync them with Google Sheets, n8n reads their login activity (Heartbeat).
+
+### 2. "Refresh Server Data" Button
+Google Sheets is your "Main Database." Sometimes technicians fill reports, or you manually type data into the Sheet on your PC. 
+*   **Sync Logic:** Clicking "Refresh Server Data" forces the app to talk to n8n to fetch the absolute latest status from the Sheet. It updates technicians' online status and checks for new assignment tickets created by n8n.
 
 ---
 
-## 🧪 How to Test with Multiple Technicians
-You don't need 10 phones to test the app! You can simulate a team of 10 from one laptop:
-1. **Incognito Tabs:** Open Chrome and press `Ctrl+Shift+N`. Every Incognito window acts like a brand-new phone.
-2. **Chrome Profiles:** Use the "Profile" icon in the top-right of Chrome to "Add" a person. Each profile has its own memory, allowing you to stay logged in as Tech 1, Tech 2, and Tech 3 simultaneously.
-3. **Simulation Controls:** Use the **Diagnostic Terminal** (tap version 5 times) to trigger mock data rows to confirm n8n is processing Attendance and Jobs correctly without entering real customer data.
+## 🟢 Real-Time Presence ("Green Dot")
+The pulsing green dot is **Real-Time**. 
+*   **How it works:** Every 2 minutes, the technician's phone sends a "Heartbeat" (a secret ping) to the Hostinger server.
+*   **Admin View:** Your dashboard checks these pings. If a ping was received in the last 5 minutes, the dot pulses green. If the tech closes the app, the dot turns gray automatically.
 
 ---
 
-## 📂 Sheet Requirements
-**New Tab:** `Presence`
-**Columns:** `Technician ID`, `Technician Name`, `App Version`, `Last Seen`
-*Ensure Row 1 contains these headers exactly.*
+## 📂 Sheet Requirements (Maintenance)
+**Tab 4:** `Presence`
+**Headers (Row 1):** `Technician ID`, `Technician Name`, `App Version`, `Last Seen`
+*Ensure your n8n workflow updates this tab whenever it receives an action: "HEARTBEAT".*

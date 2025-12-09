@@ -205,6 +205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const updated = technicians.filter(t => t.id !== id);
       setTechnicians(updated);
       localStorage.setItem('technicians', JSON.stringify(updated));
+      addToast('Technician removed.', 'success');
   };
 
   const addTechnician = (tech: any) => {
@@ -212,6 +213,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updated = [...technicians, newTech];
     setTechnicians(updated);
     localStorage.setItem('technicians', JSON.stringify(updated));
+    addToast(`${tech.name} Saved Locally!`, 'success');
   };
 
   const refreshData = () => window.location.reload();
