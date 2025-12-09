@@ -7,16 +7,15 @@ import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
 import SettingsModal from './SettingsModal';
 import PerformanceView from './PerformanceView';
-import { Ticket, WebhookStatus, UserRole } from '../types';
+import { WebhookStatus } from '../types';
 
 const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onViewTicket }) => {
-  const { user, logout, syncTickets, technicians, isSyncing } = useAppContext();
+  const { user, logout, syncTickets, technicians, webhookStatus, checkWebhookHealth } = useAppContext();
   const [activeView, setActiveView] = useState('jobs');
   const [showManual, setShowManual] = useState(false);
   const [showIntel, setShowIntel] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // COUNT ONLINE TECHS
   const onlineCount = useMemo(() => {
       const fiveMins = 5 * 60 * 1000;
       return technicians.filter(t => t.lastSeen && (Date.now() - new Date(t.lastSeen).getTime() < fiveMins)).length;
@@ -28,17 +27,28 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
       return () => clearInterval(interval);
   }, [syncTickets]);
 
+  const StatusPill = () => {
+    const color = webhookStatus === WebhookStatus.Connected ? 'bg-green-100 text-green-700' : 
+                  webhookStatus === WebhookStatus.Checking ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+    return (
+        <button onClick={() => checkWebhookHealth()} className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1 ${color}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${webhookStatus === WebhookStatus.Connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+            <span>n8n: {webhookStatus}</span>
+        </button>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-lg shadow-sm flex justify-between items-center border">
         <div>
           <h2 className="text-xl font-bold">Hello, {user?.name}</h2>
-          <div className="flex items-center space-x-3 mt-1">
-             <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-2 mt-1">
+             <div className="flex items-center space-x-1 border-r pr-2">
                  <span className={`w-2 h-2 rounded-full ${onlineCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
-                 <span className="text-xs font-semibold text-gray-500">{onlineCount} technicians online</span>
+                 <span className="text-xs font-semibold text-gray-500">{onlineCount} Techs Live</span>
              </div>
-             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">Admin</span>
+             <StatusPill />
           </div>
         </div>
         <div className="flex space-x-2">

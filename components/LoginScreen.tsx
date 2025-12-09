@@ -12,7 +12,7 @@ const COORDINATOR_PIN = '777';
 const DEFAULT_CREDENTIALS = {
     admin: {
         username: 'admin',
-        password: 'PanditAdmin@2025',
+        password: 'Pglen@2025',
         name: 'Admin User',
         role: UserRole.Admin
     },
@@ -114,11 +114,13 @@ const LoginScreen: React.FC = () => {
           return;
       }
 
-      // Special case feedback for capitalization issues
+      // Logic for capitalization hints
       if (cleanUsername.toLowerCase() === CREDENTIALS.admin.username.toLowerCase() && cleanUsername !== CREDENTIALS.admin.username) {
-          handleFailedAttempt('Username is lowercase only. Check Caps Lock.');
+          handleFailedAttempt('Username MUST be lowercase "admin". Check phone keyboard.');
+      } else if (cleanPassword.toLowerCase() === CREDENTIALS.admin.password.toLowerCase() && cleanPassword !== CREDENTIALS.admin.password) {
+          handleFailedAttempt('Password case is incorrect. Check Caps Lock.');
       } else {
-          handleFailedAttempt('Invalid Login. Check case-sensitivity.');
+          handleFailedAttempt('Incorrect Username or Password.');
       }
   };
 
@@ -146,7 +148,7 @@ const LoginScreen: React.FC = () => {
         localStorage.setItem('loginLockoutUntil', lockoutTime.toString());
         setError('Too many failed attempts. Locked for 15 mins.');
     } else {
-        setError(`${customMsg || 'Invalid Credentials'} (${MAX_ATTEMPTS - newAttempts} left)`);
+        setError(`${customMsg || 'Invalid Credentials'} (${MAX_ATTEMPTS - newAttempts} attempts left)`);
     }
   };
 
@@ -250,6 +252,7 @@ const LoginScreen: React.FC = () => {
                         autoFocus 
                         autoCapitalize="none"
                         autoCorrect="off"
+                        spellCheck="false"
                     />
                 </div>
                 <div>
@@ -263,6 +266,7 @@ const LoginScreen: React.FC = () => {
                             placeholder="••••••••" 
                             autoCapitalize="none"
                             autoCorrect="off"
+                            spellCheck="false"
                         />
                         <button
                             type="button"

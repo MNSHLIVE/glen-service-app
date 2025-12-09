@@ -1,7 +1,7 @@
 
 // IMPORTANT: The order of these headers must exactly match the order of columns in your Google Sheets.
 
-// Headers for Sheet 1: The sheet where new complaints are initially logged.
+// Tab 1: "Complaints"
 export const COMPLAINT_SHEET_HEADERS = [
   'Ticket ID',
   'Created At',
@@ -17,7 +17,7 @@ export const COMPLAINT_SHEET_HEADERS = [
   'Admin Notes'
 ];
 
-// Headers for Sheet 2: The master sheet where completed job details are logged.
+// Tab 2: "Job Updates"
 export const TECHNICIAN_UPDATE_HEADERS = [
   'Ticket ID',
   'Created At',
@@ -39,21 +39,18 @@ export const TECHNICIAN_UPDATE_HEADERS = [
   'Free Service'
 ];
 
-// Headers for Sheet 3: Attendance Logging
+// Tab 3: "Attendance"
 export const ATTENDANCE_SHEET_HEADERS = [
   'TechnicianId',
   'Technician Name',
   'AttendanceStatus',
-  'Timestamp',
-  'CheckIn',
-  'CheckOut'
+  'Timestamp'
 ];
 
-// Headers for Sheet 4: Real-time Presence tracking (New)
-// Create a tab named "Presence" in your sheet.
+// Tab 4: "Presence" (Tracking heartbeats for Green Dot)
 export const PRESENCE_SHEET_HEADERS = [
   'Technician ID',    // Col A
   'Technician Name',  // Col B
   'App Version',      // Col C
-  'Last Seen'         // Col D (Timestamp)
+  'Last Seen'         // Col D (Timestamp ISO)
 ];
