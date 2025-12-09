@@ -4,13 +4,15 @@
   "description": "A mobile-first app for 'Pandit Glen Service' to automate daily service job assignment, payment tracking, and customer feedback.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f2f2f7",
+  "orientation": "portrait",
+  "background_color": "#e6f2ff",
   "theme_color": "#007aff",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512x512.png",

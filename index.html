@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is required for edge-to-edge display on iPhones with notches -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Pandit Glen Service</title>
     
     <!-- PWA Manifest -->
@@ -14,8 +15,9 @@
 
     <!-- PWA support for Apple devices -->
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- Hides the browser UI (Standalone mode) -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Pandit">
+    <meta name="apple-mobile-web-app-title" content="Pandit Glen">
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 
     <!-- Google Fonts -->
@@ -47,6 +49,9 @@
         background-color: #f0f4f8;
         background-image: linear-gradient(160deg, #e6f2ff 0%, #f7f9fc 100%);
         min-height: 100vh;
+        /* Safe Area Padding for mobile notches */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
       }
       #unsupported-browser {
           display: none;
@@ -58,6 +63,10 @@
           justify-content: center;
           text-align: center;
           padding: 2rem;
+      }
+      /* Prevent elastic scrolling in standalone mode on iOS */
+      html, body {
+        overscroll-behavior-y: contain;
       }
     </style>
   <script type="importmap">
