@@ -3,8 +3,8 @@ export enum UserRole {
   Admin = 'Admin',
   Technician = 'Technician',
   Controller = 'Controller',
-  Developer = 'Developer', // Master Role (PIN 888888)
-  Coordinator = 'Coordinator', // New Role (PIN 777)
+  Developer = 'Developer',
+  Coordinator = 'Coordinator',
 }
 
 export enum WebhookStatus {
@@ -28,13 +28,15 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  version?: string;
 }
 
 export interface Technician {
   id: string;
   name: string;
-  password?: string; // For mock login
-  points: number; // For gamification/leaderboard
+  password?: string;
+  points: number;
+  lastSeen?: Date;
 }
 
 export enum TicketStatus {
@@ -100,8 +102,8 @@ export interface Ticket {
   paymentStatus?: PaymentStatus;
   remarks?: string;
   warrantyUpdated?: boolean;
-  photoUrl?: string; // base64 data URL for job completion proof
-  damagedPartImageUrl?: string; // URL link to image in Google Drive
+  photoUrl?: string;
+  damagedPartImageUrl?: string;
   serviceChecklist?: ServiceChecklist;
   comments?: string;
   cause?: string;
@@ -109,15 +111,15 @@ export interface Ticket {
   warrantyApplicable?: boolean;
   amountCollected?: number;
   partsReplaced?: ReplacedPart[];
-  pointsAwarded?: boolean; // Flag to check if points have been given for this ticket
-  freeService?: boolean; // New field for free service tracking
-  adminNotes?: string; // Special instructions from Admin
+  pointsAwarded?: boolean;
+  freeService?: boolean;
+  adminNotes?: string;
 }
 
 export interface Feedback {
   id: string;
   ticketId: string;
-  rating: number; // 1-5
+  rating: number;
   comment?: string;
   createdAt: Date;
 }

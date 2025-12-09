@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
 import LoginScreen from './components/LoginScreen';
@@ -10,6 +11,8 @@ import ToastContainer from './components/Toast';
 import InstallPrompt from './components/InstallPrompt';
 import { APP_CONFIG } from './config';
 
+const APP_VERSION = '4.6.2';
+
 const Logo: React.FC<{ onVersionTap?: () => void }> = ({ onVersionTap }) => {
     const { BRANDING } = APP_CONFIG;
     return (
@@ -17,68 +20,49 @@ const Logo: React.FC<{ onVersionTap?: () => void }> = ({ onVersionTap }) => {
         <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2Z" fill={BRANDING?.logoColor || "#007aff"}/>
           <path d="M16.5 8.5L10 15L7.5 12.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M12 5V2M12 22V19M19 12H22M2 12H5M17.6569 6.34315L19.7782 4.22183M4.22183 19.7782L6.34315 17.6569M17.6569 17.6569L19.7782 19.7782M4.22183 4.22183L6.34315 6.34315" stroke={BRANDING?.logoColor || "#007aff"} strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
         <h1 className="text-xl font-bold" style={{ color: BRANDING?.logoColor || '#007aff' }}>
-          {BRANDING?.appNamePrefix || 'Pandit'} <span className="font-light text-gray-700">{BRANDING?.appNameSuffix || 'Glen Service'}</span>
-          <span onClick={onVersionTap} className="ml-2 text-[10px] text-gray-300 font-mono cursor-pointer select-none">v4.6.1</span>
+          {BRANDING?.appNamePrefix || 'Pandit'} <span className="font-light text-gray-700">{BRANDING?.appNameSuffix || 'Glen'}</span>
+          <span onClick={onVersionTap} className="ml-2 text-[10px] text-gray-300 font-mono cursor-pointer select-none">v{APP_VERSION}</span>
         </h1>
       </div>
     );
 };
 
-
 const App: React.FC = () => {
-  const { user, isAppLoading } = useAppContext();
+  const { user, isAppLoading, sendHeartbeat } = useAppContext();
   const [viewingTicketId, setViewingTicketId] = useState<string | null>(null);
   const [diagnosticTaps, setDiagnosticTaps] = useState(0);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
+  // PRESENCE HEARTBEAT INTERVAL
+  useEffect(() => {
+    if (user && user.role === UserRole.Technician) {
+        sendHeartbeat();
+        const interval = setInterval(sendHeartbeat, 120000); // Every 2 mins
+        return () => clearInterval(interval);
+    }
+  }, [user, sendHeartbeat]);
+
   const handleVersionTap = () => {
       setDiagnosticTaps(prev => prev + 1);
-      if (diagnosticTaps >= 4) { // 5 taps
+      if (diagnosticTaps >= 4) {
           setShowDiagnostics(true);
           setDiagnosticTaps(0);
       }
   };
 
-  const handleViewTicket = (ticketId: string) => {
-    setViewingTicketId(ticketId);
-  };
-
-  const handleBackToList = () => {
-    setViewingTicketId(null);
-  };
-  
-  if (isAppLoading) {
-      return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-             <div className="animate-pulse">
-                <Logo />
-             </div>
-             <p className="mt-4 text-gray-400 text-sm">Initializing launch sequence...</p>
-          </div>
-      )
-  }
+  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   const renderContent = () => {
-    if (!user) {
-      return <LoginScreen />;
-    }
-
-    if (viewingTicketId) {
-      return <TicketDetails ticketId={viewingTicketId} onBack={handleBackToList} />;
-    }
-    
-    if (user.role === UserRole.Admin || user.role === UserRole.Controller || user.role === UserRole.Developer || user.role === UserRole.Coordinator) {
-      return <AdminDashboard onViewTicket={handleViewTicket} />;
-    }
+    if (!user) return <LoginScreen />;
+    if (viewingTicketId) return <TicketDetails ticketId={viewingTicketId} onBack={() => setViewingTicketId(null)} />;
     
     if (user.role === UserRole.Technician) {
-      return <TechnicianView onViewTicket={handleViewTicket} />;
+      return <TechnicianView onViewTicket={setViewingTicketId} />;
     }
-
-    return null;
+    
+    return <AdminDashboard onViewTicket={setViewingTicketId} />;
   };
 
   return (
@@ -87,13 +71,18 @@ const App: React.FC = () => {
       <InstallPrompt />
       {showDiagnostics && <DiagnosticModal onClose={() => setShowDiagnostics(false)} />}
       
-      <header className="bg-white/70 backdrop-blur-sm shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
           <Logo onVersionTap={handleVersionTap} />
+          {user && (
+            <div className="text-xs text-gray-400 font-mono">
+                {user.role} online
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="flex-grow max-w-4xl mx-auto w-full p-4 pb-24 sm:pb-4">
+      <main className="flex-grow max-w-4xl mx-auto w-full p-4 pb-24">
         {renderContent()}
       </main>
     </div>
