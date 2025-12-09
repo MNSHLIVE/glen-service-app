@@ -8,7 +8,7 @@ import { APP_CONFIG } from '../config';
 const CONTROLLER_PIN = '555';
 const COORDINATOR_PIN = '777';
 
-// Default Fallback Credentials (Secure defaults if config missing)
+// Default Fallback Credentials
 const DEFAULT_CREDENTIALS = {
     admin: {
         username: 'admin',
@@ -28,18 +28,11 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_TIME = 15 * 60 * 1000; 
 
 const LoginScreen: React.FC = () => {
-  // State for toggling modes
   const [isCredentialMode, setIsCredentialMode] = useState(false);
-  
-  // PIN Mode State
   const [pin, setPin] = useState('');
-  
-  // Credential Mode State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // Common State
   const [error, setError] = useState('');
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
@@ -47,7 +40,6 @@ const LoginScreen: React.FC = () => {
   
   const { login, technicians } = useAppContext();
   
-  // Determine active credentials (Config vs Defaults)
   const CREDENTIALS = {
       admin: {
           ...DEFAULT_CREDENTIALS.admin,
@@ -71,12 +63,10 @@ const LoginScreen: React.FC = () => {
     }
   }, []);
 
-  // Clear error when typing
   useEffect(() => {
     if (error) setError('');
   }, [pin, username, password]);
 
-  // --- PIN LOGIN HANDLER (Technicians/Staff) ---
   const handlePinLoginAttempt = (enteredPin: string) => {
      if (isLockoutActive()) return;
 
@@ -99,31 +89,39 @@ const LoginScreen: React.FC = () => {
       return;
     }
     
-    handleFailedAttempt();
+    handleFailedAttempt('Invalid PIN');
     setPin('');
   };
   
-  // --- CREDENTIAL LOGIN HANDLER (Admin/Dev) ---
   const handleCredentialLogin = (e: React.FormEvent) => {
       e.preventDefault();
       if (isLockoutActive()) return;
 
-      if (username === CREDENTIALS.admin.username && password === CREDENTIALS.admin.password) {
+      const cleanUsername = username.trim();
+      const cleanPassword = password.trim();
+
+      // Check Admin
+      if (cleanUsername === CREDENTIALS.admin.username && cleanPassword === CREDENTIALS.admin.password) {
           login({ id: 'admin01', name: CREDENTIALS.admin.name, role: CREDENTIALS.admin.role });
           resetFailure();
           return;
       }
 
-      if (username === CREDENTIALS.developer.username && password === CREDENTIALS.developer.password) {
+      // Check Developer
+      if (cleanUsername === CREDENTIALS.developer.username && cleanPassword === CREDENTIALS.developer.password) {
           login({ id: 'dev01', name: CREDENTIALS.developer.name, role: CREDENTIALS.developer.role });
           resetFailure();
           return;
       }
 
-      handleFailedAttempt();
+      // Special case feedback for capitalization issues
+      if (cleanUsername.toLowerCase() === CREDENTIALS.admin.username.toLowerCase() && cleanUsername !== CREDENTIALS.admin.username) {
+          handleFailedAttempt('Username is lowercase only. Check Caps Lock.');
+      } else {
+          handleFailedAttempt('Invalid Login. Check case-sensitivity.');
+      }
   };
 
-  // --- HELPERS ---
   const isLockoutActive = () => {
       if (lockoutUntil) {
          if (Date.now() < lockoutUntil) {
@@ -138,7 +136,7 @@ const LoginScreen: React.FC = () => {
      return false;
   };
 
-  const handleFailedAttempt = () => {
+  const handleFailedAttempt = (customMsg?: string) => {
     const newAttempts = failedAttempts + 1;
     setFailedAttempts(newAttempts);
     
@@ -148,7 +146,7 @@ const LoginScreen: React.FC = () => {
         localStorage.setItem('loginLockoutUntil', lockoutTime.toString());
         setError('Too many failed attempts. Locked for 15 mins.');
     } else {
-        setError(`Invalid Credentials. (${MAX_ATTEMPTS - newAttempts} attempts left)`);
+        setError(`${customMsg || 'Invalid Credentials'} (${MAX_ATTEMPTS - newAttempts} left)`);
     }
   };
 
@@ -157,13 +155,11 @@ const LoginScreen: React.FC = () => {
       setError('');
   };
 
-  // Auto-submit PIN if length matches standard technician pins (3 or 4)
   useEffect(() => {
       if (!isCredentialMode) {
           const isPotentialMatch = pin.length === 3 && (pin === CONTROLLER_PIN || pin === COORDINATOR_PIN || technicians.some(t => t.password === pin));
           if (isPotentialMatch || pin.length >= 4) {
                const timer = setTimeout(() => {
-                   // Simple check to avoid instant error on partial types of unknown pins
                    const matchesAny = pin === CONTROLLER_PIN || pin === COORDINATOR_PIN || technicians.some(t => t.password === pin);
                    if (matchesAny) {
                        handlePinLoginAttempt(pin);
@@ -174,9 +170,7 @@ const LoginScreen: React.FC = () => {
                return () => clearTimeout(timer);
           }
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin, technicians]);
-
+  }, [pin, technicians, isCredentialMode]);
 
   const handleKeyPress = (key: string) => {
     if (lockoutUntil && Date.now() < lockoutUntil) return;
@@ -244,21 +238,22 @@ const LoginScreen: React.FC = () => {
         <p className="text-center text-gray-500 mb-6 text-sm">{isCredentialMode ? 'Enter credentials for Admin/Dev access' : 'Enter your Technician PIN'}</p>
         
         {isCredentialMode ? (
-            // --- USERNAME/PASSWORD FORM ---
             <form onSubmit={handleCredentialLogin} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Username (Case sensitive)</label>
+                    <label className="block text-sm font-medium text-gray-700">Username</label>
                     <input 
                         type="text" 
                         value={username} 
                         onChange={e => setUsername(e.target.value)} 
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-glen-blue focus:border-glen-blue" 
-                        placeholder="e.g. admin (lowercase)" 
+                        placeholder="e.g. admin" 
                         autoFocus 
+                        autoCapitalize="none"
+                        autoCorrect="off"
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Password (Case sensitive)</label>
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
                     <div className="relative">
                         <input 
                             type={showPassword ? "text" : "password"} 
@@ -266,6 +261,8 @@ const LoginScreen: React.FC = () => {
                             onChange={e => setPassword(e.target.value)} 
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-glen-blue focus:border-glen-blue pr-10" 
                             placeholder="••••••••" 
+                            autoCapitalize="none"
+                            autoCorrect="off"
                         />
                         <button
                             type="button"
@@ -286,7 +283,6 @@ const LoginScreen: React.FC = () => {
                 </button>
             </form>
         ) : (
-            // --- PIN PAD ---
             <div className="space-y-6">
                 <PinDisplay />
                 {error && <p className="text-center text-red-500 text-xs font-semibold animate-pulse">{error}</p>}
