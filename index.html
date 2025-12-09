@@ -1,26 +1,19 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <!-- viewport-fit=cover is required for edge-to-edge display on iPhones with notches -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Pandit Glen Service</title>
     
-    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
-    
-    <!-- Theme Color for browsers -->
     <meta name="theme-color" content="#007aff">
-
-    <!-- PWA support for Apple devices -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- Hides the browser UI (Standalone mode) -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Pandit Glen">
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
@@ -46,12 +39,11 @@
     </script>
     <style>
       body {
-        background-color: #f0f4f8;
-        background-image: linear-gradient(160deg, #e6f2ff 0%, #f7f9fc 100%);
+        background: radial-gradient(circle at top left, #e6f2ff 0%, #f7f9fc 100%);
         min-height: 100vh;
-        /* Safe Area Padding for mobile notches */
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
+        overflow-x: hidden;
       }
       #unsupported-browser {
           display: none;
@@ -64,9 +56,16 @@
           text-align: center;
           padding: 2rem;
       }
-      /* Prevent elastic scrolling in standalone mode on iOS */
+      /* Premium Smooth Transitions */
+      .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      
       html, body {
         overscroll-behavior-y: contain;
+        scroll-behavior: smooth;
       }
     </style>
   <script type="importmap">
@@ -81,7 +80,6 @@
 </script>
 </head>
   <body>
-    <!-- Fallback UI for old phones -->
     <div id="unsupported-browser">
         <div class="max-w-md">
             <div class="bg-glen-blue/10 p-6 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
@@ -106,7 +104,6 @@
     </div>
 
     <script>
-      // Diagnostic check for launching the app
       try {
         if (!HTMLScriptElement.supports || !HTMLScriptElement.supports('importmap')) {
            document.getElementById('unsupported-browser').style.display = 'flex';

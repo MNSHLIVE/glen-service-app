@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
-import { TECHNICIANS } from '../constants';
+import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
 import { APP_CONFIG, APP_VERSION } from '../config';
 
@@ -109,7 +109,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
           return value;
         });
-        if (Array.isArray(parsedTickets)) setTickets(parsedTickets);
+        if (Array.isArray(parsedTickets) && parsedTickets.length > 0) {
+            setTickets(parsedTickets);
+        } else {
+            setTickets(INITIAL_TICKETS);
+        }
+      } else {
+          setTickets(INITIAL_TICKETS);
       }
     } catch (error) {
     } finally {
@@ -117,6 +123,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         checkWebhookHealth();
     }
   }, [checkWebhookHealth]);
+
+  const addTicket = (ticketData: any) => {
+      const newTicket: Ticket = {
+          ...ticketData,
+          id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
+          status: TicketStatus.New,
+          createdAt: new Date(),
+          serviceBookingDate: new Date(),
+      };
+      
+      const updated = [newTicket, ...tickets];
+      setTickets(updated);
+      localStorage.setItem('tickets', JSON.stringify(updated));
+      addToast('New service ticket generated!', 'success');
+      
+      // SEND TO WEBHOOK
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'NEW_TICKET', ticket: newTicket })
+      });
+  };
+
+  const updateTicket = (updatedTicket: Ticket) => {
+      const updated = tickets.map(t => t.id === updatedTicket.id ? updatedTicket : t);
+      setTickets(updated);
+      localStorage.setItem('tickets', JSON.stringify(updated));
+      addToast('Job updated successfully.', 'success');
+
+      // SEND TO WEBHOOK
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'UPDATE_TICKET', ticket: updatedTicket })
+      });
+  };
 
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
@@ -136,7 +178,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return status ? { ...tech, lastSeen: new Date(status.lastSeen) } : tech;
             }));
         }
-        if (data.tickets) {
+        if (data.tickets && data.tickets.length > 0) {
             setTickets(data.tickets);
             localStorage.setItem('tickets', JSON.stringify(data.tickets));
         }
@@ -175,7 +217,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshData = () => window.location.reload();
 
   return (
-    <AppContext.Provider value={{ user, tickets, technicians, feedback, login, logout, addTicket: () => {}, updateTicket: () => {}, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt: () => {}, markAttendance: () => {}, sendUrgentAlert: () => {}, resetAllTechnicianPoints: () => {}, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: () => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat }}>
+    <AppContext.Provider value={{ user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt: () => {}, markAttendance: () => {}, sendUrgentAlert: () => {}, resetAllTechnicianPoints: () => {}, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: () => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat }}>
       {children}
     </AppContext.Provider>
   );
