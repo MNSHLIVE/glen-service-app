@@ -100,6 +100,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
              }));
         }
+      } else {
+          // If first time, save the default techs to storage so deletions can persist
+          localStorage.setItem('technicians', JSON.stringify(initialTechs));
       }
       setTechnicians(initialTechs);
 
@@ -118,6 +121,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setTickets(INITIAL_TICKETS);
       }
     } catch (error) {
+        console.error('App init fail:', error);
     } finally {
         setIsAppLoading(false);
         checkWebhookHealth();
@@ -202,10 +206,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteTechnician = (id: string) => {
+      const targetTech = technicians.find(t => t.id === id);
       const updated = technicians.filter(t => t.id !== id);
+      
       setTechnicians(updated);
       localStorage.setItem('technicians', JSON.stringify(updated));
-      addToast('Technician removed successfully.', 'success');
+      
+      // Safety: If deleting currently logged in technician, force logout
+      if (user && user.id === id) {
+          logout();
+      }
+
+      addToast(`${targetTech?.name || 'Technician'} removed successfully.`, 'success');
   };
 
   const addTechnician = (tech: any): boolean => {
