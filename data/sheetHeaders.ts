@@ -54,3 +54,11 @@ export const PRESENCE_SHEET_HEADERS = [
   'App Version',      // Col C
   'Last Seen'         // Col D (Timestamp ISO)
 ];
+
+// Tab 5: "Staff" (For syncing Technicians across devices)
+export const STAFF_SHEET_HEADERS = [
+  'ID',       // Col A (e.g., tech1715000)
+  'Name',     // Col B (e.g., Rahul Verma)
+  'PIN',      // Col C (e.g., 1234)
+  'Points'    // Col D (e.g., 150)
+];

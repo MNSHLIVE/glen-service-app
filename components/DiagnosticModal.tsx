@@ -89,36 +89,50 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
             </div>
 
             <div className="bg-white/5 p-4 border border-white/10 rounded-lg mb-4">
-                <h3 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">Simulation Controls</h3>
-                <div className="grid grid-cols-2 gap-2">
-                    <button 
-                        onClick={() => runSimulation('ATTENDANCE', { technicianId: 'TEST-001', technicianName: 'Simulated User', status: 'Clock In', timestamp: new Date().toISOString() })}
-                        disabled={!!isSimulating}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
-                    >
-                        {isSimulating === 'ATTENDANCE' ? 'Sending...' : '[TEST] Attendance'}
-                    </button>
-                    <button 
-                        onClick={() => runSimulation('JOB_COMPLETED', { ticketId: 'JOB-MOCK', technicianName: 'Simulated User', amount: 999, status: 'Completed', workDone: 'System Connectivity Test' })}
-                        disabled={!!isSimulating}
-                        className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
-                    >
-                        {isSimulating === 'JOB_COMPLETED' ? 'Sending...' : '[TEST] Job Done'}
-                    </button>
-                    <button 
-                        onClick={() => runSimulation('URGENT_ALERT', { type: 'Simulated Emergency', comments: 'Diagnostics check', timestamp: new Date().toISOString() })}
-                        disabled={!!isSimulating}
-                        className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
-                    >
-                        {isSimulating === 'URGENT_ALERT' ? 'Sending...' : '[TEST] SOS Alert'}
-                    </button>
-                    <button 
-                        onClick={() => runSimulation('HEARTBEAT', { technicianId: 'TEST-001', version: APP_VERSION, timestamp: new Date().toISOString() })}
-                        disabled={!!isSimulating}
-                        className="bg-gray-600 hover:bg-gray-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
-                    >
-                        {isSimulating === 'HEARTBEAT' ? 'Sending...' : '[TEST] Presence'}
-                    </button>
+                <h3 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">Workflow Simulations</h3>
+                
+                <div className="space-y-4">
+                    {/* JOB WORKFLOWS */}
+                    <div>
+                        <p className="text-[10px] text-gray-500 mb-2">Job & Alerts</p>
+                        <div className="grid grid-cols-2 gap-2">
+                             <button 
+                                onClick={() => runSimulation('ATTENDANCE', { technicianId: 'TEST-001', technicianName: 'Simulated User', status: 'Clock In', timestamp: new Date().toISOString() })}
+                                disabled={!!isSimulating}
+                                className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                            >
+                                {isSimulating === 'ATTENDANCE' ? 'Sending...' : '[TEST] Attendance'}
+                            </button>
+                            <button 
+                                onClick={() => runSimulation('JOB_COMPLETED', { ticketId: 'JOB-MOCK', technicianName: 'Simulated User', amount: 999, status: 'Completed', workDone: 'System Connectivity Test' })}
+                                disabled={!!isSimulating}
+                                className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                            >
+                                {isSimulating === 'JOB_COMPLETED' ? 'Sending...' : '[TEST] Job Done'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* STAFF MANAGEMENT */}
+                    <div>
+                        <p className="text-[10px] text-gray-500 mb-2">Staff Management (Requires 'Staff' Tab)</p>
+                        <div className="grid grid-cols-2 gap-2">
+                             <button 
+                                onClick={() => runSimulation('ADD_TECHNICIAN', { technician: { id: 'TEST-TECH-01', name: 'Simulated Tech', password: '999', points: 0 } })}
+                                disabled={!!isSimulating}
+                                className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                            >
+                                {isSimulating === 'ADD_TECHNICIAN' ? 'Adding...' : '[TEST] Add Staff'}
+                            </button>
+                            <button 
+                                onClick={() => runSimulation('REMOVE_TECHNICIAN', { technicianId: 'TEST-TECH-01' })}
+                                disabled={!!isSimulating}
+                                className="bg-red-900 hover:bg-red-800 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                            >
+                                {isSimulating === 'REMOVE_TECHNICIAN' ? 'Deleting...' : '[TEST] Delete Staff'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

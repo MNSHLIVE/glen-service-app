@@ -61,7 +61,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <h3 className="text-xl font-bold text-gray-800">Technician Management</h3>
                         <p className="text-xs text-gray-500">Manage PINs and view online presence</p>
                     </div>
-                    <button onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-600">&times;</button>
+                    <button type="button" onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-600">&times;</button>
                 </div>
                 
                 <div className="p-6 overflow-y-auto space-y-6 bg-white">
@@ -80,6 +80,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         </div>
                                     </div>
                                     <button 
+                                        type="button"
                                         onClick={() => handleDeleteClick(tech.id, tech.name)} 
                                         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Remove Technician"
@@ -122,6 +123,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 </div>
                             </div>
                             <button 
+                                type="button"
                                 onClick={handleSave}
                                 className="w-full bg-glen-blue text-white py-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center space-x-2"
                             >
@@ -133,7 +135,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
                 
                 <div className="p-4 border-t flex justify-end bg-gray-50">
-                    <button onClick={onClose} className="px-8 py-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors tracking-wide uppercase">Close</button>
+                    <button type="button" onClick={onClose} className="px-8 py-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors tracking-wide uppercase">Close</button>
                 </div>
             </div>
         </div>

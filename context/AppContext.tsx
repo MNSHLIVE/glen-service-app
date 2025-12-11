@@ -101,7 +101,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              }));
         }
       } else {
-          // If first time, save the default techs to storage so deletions can persist
           localStorage.setItem('technicians', JSON.stringify(initialTechs));
       }
       setTechnicians(initialTechs);
@@ -137,9 +136,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           serviceBookingDate: new Date(),
       };
       
-      const updated = [newTicket, ...tickets];
-      setTickets(updated);
-      localStorage.setItem('tickets', JSON.stringify(updated));
+      setTickets(prev => {
+          const updated = [newTicket, ...prev];
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
       addToast('New service ticket generated!', 'success');
       
       // SEND TO WEBHOOK
@@ -151,9 +152,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
-      const updated = tickets.map(t => t.id === updatedTicket.id ? updatedTicket : t);
-      setTickets(updated);
-      localStorage.setItem('tickets', JSON.stringify(updated));
+      setTickets(prev => {
+          const updated = prev.map(t => t.id === updatedTicket.id ? updatedTicket : t);
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
       addToast('Job updated successfully.', 'success');
 
       // SEND TO WEBHOOK
@@ -176,16 +179,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (response.ok) {
         const data = await response.json();
+        
+        // 1. Update Tickets
+        if (data.tickets && data.tickets.length > 0) {
+            setTickets(data.tickets);
+            localStorage.setItem('tickets', JSON.stringify(data.tickets));
+        }
+
+        // 2. Update Technicians List (Cloud Sync)
+        if (data.technicians && Array.isArray(data.technicians)) {
+             setTechnicians(prev => {
+                 // We merge server data with local 'lastSeen' which is transient
+                 const serverTechs = data.technicians;
+                 const updated = serverTechs.map((st: any) => {
+                     const existing = prev.find(p => p.id === st.id);
+                     return {
+                         ...st,
+                         lastSeen: existing ? existing.lastSeen : undefined
+                     };
+                 });
+                 localStorage.setItem('technicians', JSON.stringify(updated));
+                 return updated;
+             });
+        }
+
+        // 3. Update Presence
         if (data.technicianStatuses && Array.isArray(data.technicianStatuses)) {
             setTechnicians(prev => prev.map(tech => {
                 const status = data.technicianStatuses.find((s: any) => s.id === tech.id);
                 return status ? { ...tech, lastSeen: new Date(status.lastSeen) } : tech;
             }));
         }
-        if (data.tickets && data.tickets.length > 0) {
-            setTickets(data.tickets);
-            localStorage.setItem('tickets', JSON.stringify(data.tickets));
-        }
+
         setLastSyncTime(new Date());
         setWebhookStatus(WebhookStatus.Connected);
       }
@@ -200,38 +225,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
   
   const updateTechnician = (tech: Technician) => {
-      const updated = technicians.map(t => t.id === tech.id ? tech : t);
-      setTechnicians(updated);
-      localStorage.setItem('technicians', JSON.stringify(updated));
+      setTechnicians(prev => {
+          const updated = prev.map(t => t.id === tech.id ? tech : t);
+          localStorage.setItem('technicians', JSON.stringify(updated));
+          return updated;
+      });
   };
 
   const deleteTechnician = (id: string) => {
-      const targetTech = technicians.find(t => t.id === id);
-      const updated = technicians.filter(t => t.id !== id);
-      
-      setTechnicians(updated);
-      localStorage.setItem('technicians', JSON.stringify(updated));
-      
-      // Safety: If deleting currently logged in technician, force logout
+      // 1. Remove Locally
+      setTechnicians(prev => {
+          const updated = prev.filter(t => t.id !== id);
+          localStorage.setItem('technicians', JSON.stringify(updated));
+          return updated;
+      });
+
+      // 2. Remove from Server (Cloud)
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'REMOVE_TECHNICIAN', technicianId: id })
+      }).catch(err => console.error("Failed to delete tech from server", err));
+
       if (user && user.id === id) {
           logout();
       }
-
-      addToast(`${targetTech?.name || 'Technician'} removed successfully.`, 'success');
+      addToast(`Technician removed. Refreshing server data...`, 'success');
   };
 
   const addTechnician = (tech: any): boolean => {
-    // SECURITY: Prevent duplicate PINs
+    // 1. Check duplicate PIN locally
     if (technicians.some(t => t.password === tech.password)) {
-        addToast(`Error: PIN ${tech.password} is already used by another technician.`, 'error');
+        addToast(`Error: PIN ${tech.password} is already used.`, 'error');
         return false;
     }
 
-    const newTech = { ...tech, id: `tech${Date.now()}`, points: 0 };
-    const updated = [...technicians, newTech];
-    setTechnicians(updated);
-    localStorage.setItem('technicians', JSON.stringify(updated));
-    addToast(`${tech.name} Registered Successfully!`, 'success');
+    const newId = `tech${Date.now()}`; // Simpler ID for reliability
+    const newTech = { ...tech, id: newId, points: 0 };
+    
+    // 2. Save Locally (Immediate Feedback)
+    setTechnicians(prev => {
+        const updated = [...prev, newTech];
+        localStorage.setItem('technicians', JSON.stringify(updated));
+        return updated;
+    });
+
+    // 3. Save to Server (Cloud Sync)
+    // This allows other devices to see this technician after they click "Refresh Server Data"
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'ADD_TECHNICIAN', technician: newTech })
+    }).catch(err => console.error("Failed to sync new tech to server", err));
+
+    addToast(`${tech.name} Saved! Data sent to Google Sheet.`, 'success');
     return true;
   };
 

@@ -6,25 +6,47 @@
 
 ---
 
-## 🚀 How Data is Handled
-### 1. Local Memory (Speed)
-When you add a technician or fill a ticket, the app saves it **locally** on your phone instantly. This means you don't have to wait for the internet for basic operations.
-*   **Technician Save:** When you click "Save Technician," they are stored in YOUR local list. To sync them with Google Sheets, n8n reads their login activity (Heartbeat).
+## ⚡️ FINAL N8N CHEAT SHEET (Copy Exact Values)
 
-### 2. "Refresh Server Data" Button
-Google Sheets is your "Main Database." Sometimes technicians fill reports, or you manually type data into the Sheet on your PC. 
-*   **Sync Logic:** Clicking "Refresh Server Data" forces the app to talk to n8n to fetch the absolute latest status from the Sheet. It updates technicians' online status and checks for new assignment tickets created by n8n.
+Use this table to configure your **Switch Node** and **Google Sheets Nodes**.
+
+### Step 1: The Switch Node
+**Expression to filter on:** `{{ $json.action }}`
+
+| Path Name | Operator | **Value (Copy This)** | Description |
+| :--- | :--- | :--- | :--- |
+| **Add Tech** | String = | `ADD_TECHNICIAN` | Adds a new staff member |
+| **Remove Tech** | String = | `REMOVE_TECHNICIAN` | Deletes a staff member |
+| **New Job** | String = | `NEW_TICKET` | Creates a new complaint |
+| **Update Job** | String = | `UPDATE_TICKET` | Updates status/notes |
+| **Attendance** | String = | `ATTENDANCE` | Logs Clock In/Out |
 
 ---
 
-## 🟢 Real-Time Presence ("Green Dot")
-The pulsing green dot is **Real-Time**. 
-*   **How it works:** Every 2 minutes, the technician's phone sends a "Heartbeat" (a secret ping) to the Hostinger server.
-*   **Admin View:** Your dashboard checks these pings. If a ping was received in the last 5 minutes, the dot pulses green. If the tech closes the app, the dot turns gray automatically.
+### Step 2: The Google Sheets Nodes
+
+#### Path 1: If value is "ADD_TECHNICIAN"
+*   **Node Type:** Google Sheets
+*   **Operation:** Append or Update Row
+*   **Sheet:** `Staff`
+*   **Mapping:**
+    *   Column A (ID) -> `{{ $json.technician.id }}`
+    *   Column B (Name) -> `{{ $json.technician.name }}`
+    *   Column C (PIN) -> `{{ $json.technician.password }}`
+
+#### Path 2: If value is "REMOVE_TECHNICIAN"
+*   **Node Type:** Google Sheets
+*   **Operation:** **Delete Row**
+*   **Sheet:** `Staff`
+*   **Lookup Column:** `ID`
+*   **Lookup Value:** `{{ $json.technicianId }}`
 
 ---
 
-## 📂 Sheet Requirements (Maintenance)
-**Tab 4:** `Presence`
-**Headers (Row 1):** `Technician ID`, `Technician Name`, `App Version`, `Last Seen`
-*Ensure your n8n workflow updates this tab whenever it receives an action: "HEARTBEAT".*
+## 🟢 How to Test (Final Verification)
+1.  Open App > Admin Dashboard.
+2.  Tap Version Number (v4.6.3) **5 times**.
+3.  **Click [TEST] Add Staff**: A row should appear in your 'Staff' tab.
+4.  **Click [TEST] Delete Staff**: That row should disappear.
+
+If this works, your app is **100% Ready**.
