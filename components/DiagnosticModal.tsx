@@ -9,10 +9,10 @@ interface DiagnosticModalProps {
 
 const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
     const { webhookStatus } = useAppContext();
-    const [logs, setLogs] = useState<{msg: string, type: 'info' | 'error' | 'success'}[]>([]);
+    const [logs, setLogs] = useState<{msg: string, type: 'info' | 'error' | 'success' | 'code'}[]>([]);
     const [isSimulating, setIsSimulating] = useState<string | null>(null);
 
-    const addLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
+    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'code' = 'info') => {
         setLogs(prev => [...prev, { msg, type }]);
     };
 
@@ -47,23 +47,26 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
 
     const runSimulation = async (action: string, mockPayload: Record<string, any>) => {
         setIsSimulating(action);
-        addLog(`Triggering Simulation: ${action}...`, 'info');
+        const fullPayload = { action, ...mockPayload, isSimulation: true };
+        
+        addLog(`Triggering ${action}... Payload below:`, 'info');
+        addLog(JSON.stringify(fullPayload, null, 2), 'code');
         
         try {
             const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...mockPayload, isSimulation: true })
+                body: JSON.stringify(fullPayload)
             });
 
             if (response.ok) {
-                addLog(`✅ Simulation Successful: ${action} sent to n8n.`, 'success');
-                addLog(`Check your Google Sheet now!`, 'success');
+                addLog(`✅ Server accepted payload (Status 200).`, 'success');
+                addLog(`Check Google Sheet now.`, 'success');
             } else {
-                addLog(`❌ Simulation Failed: Server returned status ${response.status}`, 'error');
+                addLog(`❌ Server Rejected: Status ${response.status}`, 'error');
             }
         } catch (e) {
-            addLog(`❌ ERROR: Failed to communicate with server.`, 'error');
+            addLog(`❌ Network Error: Failed to reach n8n.`, 'error');
         } finally {
             setIsSimulating(null);
         }
@@ -79,10 +82,15 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                 <button onClick={onClose} className="text-white text-3xl">&times;</button>
             </div>
             
-            <div className="flex-grow overflow-y-auto bg-black/50 p-4 border border-white/10 rounded-lg text-sm space-y-2 mb-4">
+            <div className="flex-grow overflow-y-auto bg-black/50 p-4 border border-white/10 rounded-lg text-sm space-y-2 mb-4 font-mono">
                 {logs.map((log, i) => (
-                    <div key={i} className={`flex ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-300'}`}>
-                        <span className="mr-2 opacity-30">[{new Date().toLocaleTimeString()}]</span>
+                    <div key={i} className={`
+                        ${log.type === 'error' ? 'text-red-400' : ''}
+                        ${log.type === 'success' ? 'text-green-400' : ''}
+                        ${log.type === 'info' ? 'text-blue-300' : ''}
+                        ${log.type === 'code' ? 'text-yellow-300 ml-4 whitespace-pre-wrap' : 'flex'}
+                    `}>
+                        {log.type !== 'code' && <span className="mr-2 opacity-30">[{new Date().toLocaleTimeString()}]</span>}
                         <span>{log.msg}</span>
                     </div>
                 ))}

@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
 import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
@@ -46,6 +46,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  
+  // Track optimistic updates that haven't been confirmed by server yet to prevent sync flickering
+  const pendingActions = useRef<{ added: Set<string>, deleted: Set<string> }>({ 
+      added: new Set(), 
+      deleted: new Set() 
+  });
+
   const { addToast } = useToast();
   
   const sendHeartbeat = useCallback(() => {
@@ -186,18 +193,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('tickets', JSON.stringify(data.tickets));
         }
 
-        // 2. Update Technicians List (Cloud Sync)
+        // 2. Update Technicians List (Cloud Sync with Race Condition Protection)
         if (data.technicians && Array.isArray(data.technicians)) {
              setTechnicians(prev => {
-                 // We merge server data with local 'lastSeen' which is transient
-                 const serverTechs = data.technicians;
-                 const updated = serverTechs.map((st: any) => {
+                 let serverTechs = data.technicians;
+
+                 // A. Remove any techs that are marked for deletion locally
+                 // (Even if server sends them, we ignore them until our timeout expires)
+                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(st.id));
+
+                 // B. Add any techs that were added locally but are missing from server
+                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(p.id));
+                 
+                 // Merge: Server techs + Pending local techs
+                 const combined = [...serverTechs];
+                 pendingAdds.forEach(pa => {
+                     if (!combined.find(m => m.id === pa.id)) {
+                         combined.push(pa);
+                     }
+                 });
+
+                 // C. Preserve Last Seen (local state)
+                 const updated = combined.map((st: any) => {
                      const existing = prev.find(p => p.id === st.id);
                      return {
                          ...st,
                          lastSeen: existing ? existing.lastSeen : undefined
                      };
                  });
+                 
+                 // Clean up verified adds from pending list
+                 // If the server now has the ID, we don't need to track it as pending anymore
+                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(t.id));
+
                  localStorage.setItem('technicians', JSON.stringify(updated));
                  return updated;
              });
@@ -233,14 +261,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteTechnician = (id: string) => {
-      // 1. Remove Locally
+      // 1. Mark as pending delete to prevent Sync from re-adding it immediately
+      pendingActions.current.deleted.add(id);
+      setTimeout(() => pendingActions.current.deleted.delete(id), 120000); // Clear after 2 mins
+
+      // 2. Remove Locally
       setTechnicians(prev => {
           const updated = prev.filter(t => t.id !== id);
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
 
-      // 2. Remove from Server (Cloud)
+      // 3. Remove from Server (Cloud)
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -263,15 +295,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newId = `tech${Date.now()}`; // Simpler ID for reliability
     const newTech = { ...tech, id: newId, points: 0 };
     
-    // 2. Save Locally (Immediate Feedback)
+    // 2. Mark as pending add to prevent Sync from removing it before server updates
+    pendingActions.current.added.add(newId);
+    setTimeout(() => pendingActions.current.added.delete(newId), 120000); // Clear after 2 mins
+    
+    // 3. Save Locally (Immediate Feedback)
     setTechnicians(prev => {
         const updated = [...prev, newTech];
         localStorage.setItem('technicians', JSON.stringify(updated));
         return updated;
     });
 
-    // 3. Save to Server (Cloud Sync)
-    // This allows other devices to see this technician after they click "Refresh Server Data"
+    // 4. Save to Server (Cloud Sync)
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -285,7 +320,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshData = () => window.location.reload();
 
   return (
-    <AppContext.Provider value={{ user, tickets, technicians, feedback, login, logout, addTicket, updateTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt: () => {}, markAttendance: () => {}, sendUrgentAlert: () => {}, resetAllTechnicianPoints: () => {}, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: () => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat }}>
+    <AppContext.Provider value={{ 
+        user, 
+        tickets, 
+        technicians, 
+        feedback, 
+        isSyncing,
+        login, 
+        logout, 
+        addTicket, 
+        updateTicket, 
+        uploadDamagedPart: () => {}, 
+        addFeedback: () => {}, 
+        addTechnician, 
+        updateTechnician, 
+        deleteTechnician, 
+        resetTechniciansToDefaults: () => {}, 
+        sendReceipt: () => {}, 
+        markAttendance: () => {}, 
+        sendUrgentAlert: () => {}, 
+        resetAllTechnicianPoints: () => {}, 
+        syncTickets, 
+        webhookStatus, 
+        checkWebhookHealth, 
+        sendCustomWebhookPayload: () => {}, 
+        lastSyncTime, 
+        isAppLoading, 
+        refreshData, 
+        sendHeartbeat 
+    }}>
       {children}
     </AppContext.Provider>
   );
