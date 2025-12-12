@@ -199,23 +199,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  let serverTechs = data.technicians;
 
                  // A. Remove any techs that are marked for deletion locally
-                 // (Even if server sends them, we ignore them until our timeout expires)
-                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(st.id));
+                 // CRITICAL: Convert IDs to string to avoid type mismatches (Sheet "123" vs App 123)
+                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
 
                  // B. Add any techs that were added locally but are missing from server
-                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(p.id));
+                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(String(p.id)));
                  
                  // Merge: Server techs + Pending local techs
                  const combined = [...serverTechs];
                  pendingAdds.forEach(pa => {
-                     if (!combined.find(m => m.id === pa.id)) {
+                     // Use strict string comparison to avoid duplicates
+                     if (!combined.find(m => String(m.id) === String(pa.id))) {
                          combined.push(pa);
                      }
                  });
 
                  // C. Preserve Last Seen (local state)
                  const updated = combined.map((st: any) => {
-                     const existing = prev.find(p => p.id === st.id);
+                     const existing = prev.find(p => String(p.id) === String(st.id));
                      return {
                          ...st,
                          lastSeen: existing ? existing.lastSeen : undefined
@@ -224,7 +225,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  
                  // Clean up verified adds from pending list
                  // If the server now has the ID, we don't need to track it as pending anymore
-                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(t.id));
+                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(String(t.id)));
 
                  localStorage.setItem('technicians', JSON.stringify(updated));
                  return updated;
@@ -234,7 +235,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // 3. Update Presence
         if (data.technicianStatuses && Array.isArray(data.technicianStatuses)) {
             setTechnicians(prev => prev.map(tech => {
-                const status = data.technicianStatuses.find((s: any) => s.id === tech.id);
+                const status = data.technicianStatuses.find((s: any) => String(s.id) === String(tech.id));
                 return status ? { ...tech, lastSeen: new Date(status.lastSeen) } : tech;
             }));
         }
@@ -261,13 +262,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteTechnician = (id: string) => {
+      const idStr = String(id);
+      
       // 1. Mark as pending delete to prevent Sync from re-adding it immediately
-      pendingActions.current.deleted.add(id);
-      setTimeout(() => pendingActions.current.deleted.delete(id), 120000); // Clear after 2 mins
+      pendingActions.current.deleted.add(idStr);
+      setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000); // Clear after 2 mins
 
-      // 2. Remove Locally
+      // 2. Remove Locally (Immediate Feedback)
       setTechnicians(prev => {
-          const updated = prev.filter(t => t.id !== id);
+          const updated = prev.filter(t => String(t.id) !== idStr);
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
@@ -276,13 +279,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ action: 'REMOVE_TECHNICIAN', technicianId: id })
-      }).catch(err => console.error("Failed to delete tech from server", err));
+          body: JSON.stringify({ action: 'REMOVE_TECHNICIAN', technicianId: idStr })
+      })
+      .then(res => {
+          if(!res.ok) throw new Error('Server returned ' + res.status);
+      })
+      .catch(err => {
+          console.error("Failed to delete tech from server", err);
+          // Don't revert local state to keep UI snappy, but warn user
+          addToast("Network issue: Server deletion might have failed.", 'error');
+      });
 
-      if (user && user.id === id) {
+      if (user && user.id === idStr) {
           logout();
+      } else {
+          addToast(`Technician removed. Syncing...`, 'success');
       }
-      addToast(`Technician removed. Refreshing server data...`, 'success');
   };
 
   const addTechnician = (tech: any): boolean => {
