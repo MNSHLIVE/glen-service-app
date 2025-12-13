@@ -49,39 +49,59 @@ If you are testing your n8n workflow manually (without using the app), copy thes
 
 ## ⚡️ COMPLETE N8N CONFIGURATION GUIDE
 
-Use this table to configure your **Switch Node** and **Google Sheets Nodes** correctly.
-
-### 1. The Switch Node
+### 1. The Switch Node (Routing)
 **Expression to filter on:** `{{ $json.action }}`
 
-| Path Name | Operator | **Value** | Description |
-| :--- | :--- | :--- | :--- |
-| **Add Tech** | String = | `ADD_TECHNICIAN` | Adds a new staff member |
-| **Remove Tech** | String = | `REMOVE_TECHNICIAN` | Deletes a staff member |
-| **New Job** | String = | `NEW_TICKET` | Creates a new complaint |
-| **Update Job** | String = | `UPDATE_TICKET` | Updates status/notes |
-| **Attendance** | String = | `ATTENDANCE` | Logs Clock In/Out |
+| Output Port | Rule Name | Operator | **Value** | Usage |
+| :--- | :--- | :--- | :--- | :--- |
+| **0** | New Job | String = | `NEW_TICKET` | Create complaint |
+| **1** | Add Tech | String = | `ADD_TECHNICIAN` | Add staff member |
+| **2** | Remove Tech | String = | `REMOVE_TECHNICIAN` | Delete staff member |
+| **3** | Update Job | String = | `UPDATE_TICKET` | Close job/Update |
+| **4** | Presence | String = | `HEARTBEAT` | (Optional) Update last seen |
+| **5** | Attendance | String = | `ATTENDANCE` | Log Clock In/Out |
 
 ---
 
-### 2. The Google Sheets Nodes (The Actions)
+### 2. The Google Sheets Nodes (Wiring)
 
-#### Path 1: "Add Tech" (ADD_TECHNICIAN)
-*   **Node Type:** Google Sheets
-*   **Operation:** **Append Row** (or Update if exists)
-*   **Sheet Name:** `Staff`
+**🚫 Do not use "Get Row" unless necessary.** The simplest, most robust wiring is:
+
+#### Path 0: "New Job"
+*   **Connects to:** Google Sheet Node A
+*   **Operation:** Append Row
+*   **Sheet:** `Complaints`
+
+#### Path 1: "Add Tech" (The missing link)
+*   **Connects to:** Google Sheet Node B (Create a new one if needed)
+*   **Operation:** **Append Row**
+*   **Sheet:** `Staff`
 *   **Mapping:**
-    *   Column A (ID) -> `{{ $json.technician.id }}`
-    *   Column B (Name) -> `{{ $json.technician.name }}`
-    *   Column C (PIN) -> `{{ $json.technician.password }}`
+    *   `ID` -> `{{ $json.technician.id }}`
+    *   `Name` -> `{{ $json.technician.name }}`
+    *   `PIN` -> `{{ $json.technician.password }}`
 
-#### Path 2: "Remove Tech" (REMOVE_TECHNICIAN)
-*   **Node Type:** Google Sheets
+#### Path 2: "Remove Tech" (The broken link)
+*   **Connects to:** Google Sheet Node C (Create a new one if needed)
 *   **Operation:** **Delete Row**
-*   **Sheet Name:** `Staff`
+*   **Sheet:** `Staff`
+*   **Mode:** **Lookup** (Use the dropdown to select Lookup, NOT Row Number)
 *   **Lookup Column:** `ID` (Column A)
 *   **Lookup Value:** `{{ $json.technicianId }}`
-    *   *Note: Ensure you select the 'ID' column correctly in the dropdown.*
+
+#### Path 3: "Update Job"
+*   **Connects to:** Google Sheet Node D
+*   **Operation:** Append Row
+*   **Sheet:** `Job Updates`
+
+#### Path 5: "Attendance"
+*   **Connects to:** Google Sheet Node E
+*   **Operation:** Append Row
+*   **Sheet:** `Attendance`
+*   **Mapping:**
+    *   `TechnicianId` -> `{{ $json.technicianId }}`
+    *   `Status` -> `{{ $json.status }}`
+    *   `Timestamp` -> `{{ $json.timestamp }}`
 
 ---
 

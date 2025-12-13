@@ -48,9 +48,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   
   // Track optimistic updates that haven't been confirmed by server yet to prevent sync flickering
-  const pendingActions = useRef<{ added: Set<string>, deleted: Set<string> }>({ 
+  // added: recently added IDs
+  // deleted: recently deleted IDs
+  // updated: recently edited IDs (to prevent server overwriting local edits)
+  const pendingActions = useRef<{ added: Set<string>, deleted: Set<string>, updated: Set<string> }>({ 
       added: new Set(), 
-      deleted: new Set() 
+      deleted: new Set(),
+      updated: new Set()
   });
 
   const { addToast } = useToast();
@@ -214,9 +218,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                      }
                  });
 
-                 // C. Preserve Last Seen (local state)
+                 // C. Preserve Last Seen (local state) & Protect locally edited techs
                  const updated = combined.map((st: any) => {
-                     const existing = prev.find(p => String(p.id) === String(st.id));
+                     const idStr = String(st.id);
+                     const existing = prev.find(p => String(p.id) === idStr);
+
+                     // If this tech was recently updated locally, keep the local version!
+                     if (pendingActions.current.updated.has(idStr) && existing) {
+                         return { ...existing, lastSeen: existing.lastSeen };
+                     }
+
                      return {
                          ...st,
                          lastSeen: existing ? existing.lastSeen : undefined
@@ -224,7 +235,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  });
                  
                  // Clean up verified adds from pending list
-                 // If the server now has the ID, we don't need to track it as pending anymore
                  data.technicians.forEach((t: any) => pendingActions.current.added.delete(String(t.id)));
 
                  localStorage.setItem('technicians', JSON.stringify(updated));
@@ -254,11 +264,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
   
   const updateTechnician = (tech: Technician) => {
+      const idStr = String(tech.id);
+      
+      // 1. Mark as pending update so sync doesn't revert it
+      pendingActions.current.updated.add(idStr);
+      setTimeout(() => pendingActions.current.updated.delete(idStr), 120000); // 2 mins protection
+
+      // 2. Update Local State
       setTechnicians(prev => {
-          const updated = prev.map(t => t.id === tech.id ? tech : t);
+          const updated = prev.map(t => String(t.id) === idStr ? tech : t);
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
+
+      // 3. Sync to Server
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'UPDATE_TECHNICIAN', technician: tech })
+      }).catch(err => console.error("Update tech failed", err));
+      
+      addToast('Staff details updated successfully', 'success');
   };
 
   const deleteTechnician = (id: string) => {
@@ -286,7 +312,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
       .catch(err => {
           console.error("Failed to delete tech from server", err);
-          // Don't revert local state to keep UI snappy, but warn user
           addToast("Network issue: Server deletion might have failed.", 'error');
       });
 
@@ -304,21 +329,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return false;
     }
 
-    const newId = `tech${Date.now()}`; // Simpler ID for reliability
+    const newId = `tech${Date.now()}`; 
     const newTech = { ...tech, id: newId, points: 0 };
     
-    // 2. Mark as pending add to prevent Sync from removing it before server updates
+    // 2. Mark as pending add
     pendingActions.current.added.add(newId);
     setTimeout(() => pendingActions.current.added.delete(newId), 120000); // Clear after 2 mins
     
-    // 3. Save Locally (Immediate Feedback)
+    // 3. Save Locally
     setTechnicians(prev => {
         const updated = [...prev, newTech];
         localStorage.setItem('technicians', JSON.stringify(updated));
         return updated;
     });
 
-    // 4. Save to Server (Cloud Sync)
+    // 4. Save to Server
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Technician, WebhookStatus, UserRole } from '../types';
+import { Technician } from '../types';
 
 const PresenceDot: React.FC<{ lastSeen?: Date }> = ({ lastSeen }) => {
     const [isOnline, setIsOnline] = useState(false);
@@ -31,16 +31,19 @@ const PresenceDot: React.FC<{ lastSeen?: Date }> = ({ lastSeen }) => {
 };
 
 const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { technicians, addTechnician, deleteTechnician } = useAppContext();
+    const { technicians, addTechnician, deleteTechnician, updateTechnician } = useAppContext();
     const [newTech, setNewTech] = useState({ name: '', password: '' });
+    
+    // Editing State
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editPass, setEditPass] = useState('');
 
     const handleSave = () => {
         if (!newTech.name || !newTech.password) {
             alert("Please enter Name and PIN");
             return;
         }
-        
-        // Only clear the form if the PIN was unique and saving succeeded
         const success = addTechnician(newTech);
         if (success) {
             setNewTech({ name: '', password: '' });
@@ -48,9 +51,35 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     const handleDeleteClick = (techId: string, name: string) => {
-        if (window.confirm(`WARNING: This will permanently remove ${name}. Are you sure?`)) {
+        if (window.confirm(`⚠️ CONFIRM DELETION\n\nAre you sure you want to permanently remove technician "${name}"?\n\nThis action cannot be undone.`)) {
             deleteTechnician(techId);
         }
+    };
+    
+    const startEditing = (tech: Technician) => {
+        setEditingId(tech.id);
+        setEditName(tech.name);
+        setEditPass(tech.password || '');
+    };
+    
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditName('');
+        setEditPass('');
+    };
+    
+    const saveEdit = (tech: Technician) => {
+        if(!editName || !editPass) {
+            alert("Name and PIN cannot be empty.");
+            return;
+        }
+        
+        updateTechnician({
+            ...tech,
+            name: editName,
+            password: editPass
+        });
+        setEditingId(null);
     };
 
     return (
@@ -59,7 +88,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Technician Management</h3>
-                        <p className="text-xs text-gray-500">Manage PINs and view online presence</p>
+                        <p className="text-xs text-gray-500">Manage PINs, Edit Details, or Remove Staff</p>
                     </div>
                     <button type="button" onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-600">&times;</button>
                 </div>
@@ -71,22 +100,59 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <p className="text-center py-8 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">No technicians added.</p>
                         ) : (
                             technicians.map(tech => (
-                                <div key={tech.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 shadow-sm transition-all hover:border-glen-blue/30">
-                                    <div className="flex items-center space-x-3">
-                                        <PresenceDot lastSeen={tech.lastSeen} />
-                                        <div>
-                                            <p className="font-bold text-gray-800 leading-tight">{tech.name}</p>
-                                            <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">PIN: {tech.password} • PTS: {tech.points}</p>
+                                <div key={tech.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100 shadow-sm transition-all hover:border-glen-blue/30">
+                                    {editingId === tech.id ? (
+                                        // EDIT MODE
+                                        <div className="flex items-center space-x-3">
+                                            <div className="flex-grow space-y-2">
+                                                <input 
+                                                    value={editName}
+                                                    onChange={e => setEditName(e.target.value)}
+                                                    className="w-full p-2 border rounded text-sm font-bold"
+                                                    placeholder="Technician Name"
+                                                />
+                                                <input 
+                                                    value={editPass}
+                                                    onChange={e => setEditPass(e.target.value)}
+                                                    className="w-full p-2 border rounded text-sm font-mono"
+                                                    placeholder="PIN"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col space-y-2">
+                                                <button onClick={() => saveEdit(tech)} className="bg-green-500 text-white p-2 rounded text-xs font-bold">Save</button>
+                                                <button onClick={cancelEditing} className="bg-gray-300 text-gray-700 p-2 rounded text-xs">Cancel</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <button 
-                                        type="button"
-                                        onClick={() => handleDeleteClick(tech.id, tech.name)} 
-                                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                        title="Remove Technician"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
+                                    ) : (
+                                        // VIEW MODE
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <PresenceDot lastSeen={tech.lastSeen} />
+                                                <div>
+                                                    <p className="font-bold text-gray-800 leading-tight">{tech.name}</p>
+                                                    <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">PIN: {tech.password} • PTS: {tech.points}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex space-x-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => startEditing(tech)}
+                                                    className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Edit Details"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleDeleteClick(tech.id, tech.name)} 
+                                                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Remove Technician"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         )}
