@@ -14,11 +14,15 @@ import { APP_CONFIG, APP_VERSION } from './config';
 const Logo: React.FC<{ onVersionTap?: () => void }> = ({ onVersionTap }) => {
     const { BRANDING } = APP_CONFIG;
     return (
-      <div className="flex items-center space-x-2">
-        <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2Z" fill={BRANDING?.logoColor || "#007aff"}/>
-          <path d="M16.5 8.5L10 15L7.5 12.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+      <div className="flex items-center space-x-3">
+        {/* Updated to Original Service Technician Icon */}
+        <div className="bg-white/90 rounded-full p-1 shadow-sm border border-gray-100">
+            <img 
+                src="https://cdn-icons-png.flaticon.com/512/6009/6009864.png" 
+                alt="Logo" 
+                className="w-10 h-10 object-contain"
+            />
+        </div>
         <h1 className="text-xl font-bold" style={{ color: BRANDING?.logoColor || '#007aff' }}>
           {BRANDING?.appNamePrefix || 'Pandit'} <span className="font-light text-gray-700">{BRANDING?.appNameSuffix || 'Glen'}</span>
           <span onClick={onVersionTap} className="ml-2 text-[10px] text-gray-300 font-mono cursor-pointer select-none">v{APP_VERSION}</span>
