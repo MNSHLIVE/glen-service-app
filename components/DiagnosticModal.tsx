@@ -105,18 +105,54 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                         <p className="text-[10px] text-gray-500 mb-2">Job & Alerts</p>
                         <div className="grid grid-cols-2 gap-2">
                              <button 
-                                onClick={() => runSimulation('ATTENDANCE', { technicianId: 'TEST-001', technicianName: 'Simulated User', status: 'Clock In', timestamp: new Date().toISOString() })}
+                                onClick={() => runSimulation('NEW_TICKET', { 
+                                    ticket: {
+                                        id: `TEST-${Math.floor(Math.random()*1000)}`,
+                                        customerName: 'Test Customer',
+                                        phone: '9999999999',
+                                        address: '123 Test St, Simulation City',
+                                        complaint: 'This is a test complaint for workflow verification',
+                                        serviceCategory: 'Chimney',
+                                        technicianId: 'tech1',
+                                        status: 'New',
+                                        createdAt: new Date().toISOString(),
+                                        serviceBookingDate: new Date().toISOString(),
+                                        preferredTime: '10AM-12PM',
+                                        productDetails: { make: 'Glen', category: 'Chimney' }
+                                    }
+                                })}
+                                disabled={!!isSimulating}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                            >
+                                {isSimulating === 'NEW_TICKET' ? 'Sending...' : '[TEST] New Complaint'}
+                            </button>
+
+                            <button 
+                                onClick={() => runSimulation('UPDATE_TICKET', { 
+                                    ticket: {
+                                        id: `TEST-${Math.floor(Math.random()*1000)}`,
+                                        customerName: 'Test Customer',
+                                        status: 'Completed',
+                                        workDone: 'Diagnostic Test Completion',
+                                        amountCollected: 1500,
+                                        paymentStatus: 'Cash',
+                                        completedAt: new Date().toISOString(),
+                                        technicianId: 'tech1',
+                                        partsReplaced: [] 
+                                    }
+                                })}
                                 disabled={!!isSimulating}
                                 className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
                             >
-                                {isSimulating === 'ATTENDANCE' ? 'Sending...' : '[TEST] Attendance'}
+                                {isSimulating === 'UPDATE_TICKET' ? 'Sending...' : '[TEST] Job Completed'}
                             </button>
-                            <button 
-                                onClick={() => runSimulation('JOB_COMPLETED', { ticketId: 'JOB-MOCK', technicianName: 'Simulated User', amount: 999, status: 'Completed', workDone: 'System Connectivity Test' })}
+
+                             <button 
+                                onClick={() => runSimulation('ATTENDANCE', { technicianId: 'TEST-001', technicianName: 'Simulated User', status: 'Clock In', timestamp: new Date().toISOString() })}
                                 disabled={!!isSimulating}
-                                className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
+                                className="bg-gray-600 hover:bg-gray-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50 col-span-2"
                             >
-                                {isSimulating === 'JOB_COMPLETED' ? 'Sending...' : '[TEST] Job Done'}
+                                {isSimulating === 'ATTENDANCE' ? 'Sending...' : '[TEST] Attendance Clock-In'}
                             </button>
                         </div>
                     </div>
