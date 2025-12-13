@@ -1,9 +1,8 @@
-
 {
   "name": "Pandit Glen Service",
   "short_name": "Pandit Glen",
   "description": "A mobile-first app for 'Pandit Glen Service' to automate daily service job assignment, payment tracking, and customer feedback.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#e6f2ff",

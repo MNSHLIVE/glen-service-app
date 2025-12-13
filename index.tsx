@@ -7,7 +7,8 @@ import { ToastProvider } from './context/ToastContext';
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    // Changed from '/service-worker.js' to './service-worker.js' to fix origin mismatch
+    navigator.serviceWorker.register('./service-worker.js')
       .then(registration => {
         console.log('Service Worker registered with scope:', registration.scope);
       })

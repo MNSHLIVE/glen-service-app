@@ -2,9 +2,10 @@
 const CACHE_NAME = 'glen-service-manager-v1';
 
 // The list of files we want to cache
+// Changed absolute paths to relative to support different hosting environments
 const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
+  './',
+  './index.html',
   'https://cdn.tailwindcss.com/',
   // Note: Dynamically imported modules from the importmap might not be cached this way
   // and would be fetched from the network. For a full offline experience, these would
