@@ -22,10 +22,13 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
   }, [technicians]);
 
   useEffect(() => {
-      syncTickets(true);
-      const interval = setInterval(() => syncTickets(true), 60000);
-      return () => clearInterval(interval);
-  }, [syncTickets]);
+    if (user?.role !== 'Technician') return;
+
+    syncTickets(true);
+    const interval = setInterval(() => syncTickets(true), 60000);
+    return () => clearInterval(interval);
+}, [syncTickets, user]);
+
 
   const counts = useMemo(() => {
       return {
