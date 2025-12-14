@@ -70,6 +70,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           version: APP_VERSION,
           timestamp: new Date().toISOString()
       };
+      
+      // console.log('Sending Webhook:', payload.action, payload); // Optional: verbose logging
 
       fetch(webhookUrl, {
           method: 'POST',
@@ -84,10 +86,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const checkWebhookHealth = useCallback(async () => {
     setWebhookStatus(WebhookStatus.Checking);
     try {
+        const payload = { action: 'HEALTH_CHECK' };
+        console.log('Sending Webhook:', payload.action, payload);
+        
         const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'HEALTH_CHECK' })
+            body: JSON.stringify(payload)
         });
         if (response.ok) setWebhookStatus(WebhookStatus.Connected);
         else setWebhookStatus(WebhookStatus.Error);
@@ -154,11 +159,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       addToast('New service ticket generated!', 'success');
       
-      // SEND TO WEBHOOK
+      // SEND TO WEBHOOK: NEW_TICKET
+      const payload = { action: 'NEW_TICKET', ticket: newTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+      
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ action: 'NEW_TICKET', ticket: newTicket })
+          body: JSON.stringify(payload)
       });
   };
 
@@ -170,22 +178,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       addToast('Job updated successfully.', 'success');
 
-      // SEND TO WEBHOOK
+      // SEND TO WEBHOOK: Check if Completed or just Updated
+      // If status is Completed, send JOB_COMPLETED, otherwise UPDATE_TICKET
+      const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
+      
+      const payload = { action: actionName, ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ action: 'UPDATE_TICKET', ticket: updatedTicket })
+          body: JSON.stringify(payload)
       });
   };
 
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
+    
+    // SEND TO WEBHOOK: FETCH_NEW_JOBS
+    const payload = { action: 'FETCH_NEW_JOBS', role: user.role, technicianId: user.id };
+    if (!isBackground) console.log('Sending Webhook:', payload.action, payload);
+
     try {
       const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'FETCH_NEW_JOBS', role: user.role, technicianId: user.id })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -278,10 +297,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       // 3. Sync to Server
+      const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
+      console.log('Sending Webhook:', payload.action, payload);
+      
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ action: 'UPDATE_TECHNICIAN', technician: tech })
+          body: JSON.stringify(payload)
       }).catch(err => console.error("Update tech failed", err));
       
       addToast('Staff details updated successfully', 'success');
@@ -302,10 +324,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       // 3. Remove from Server (Cloud)
+      // UPDATED ACTION: DELETE_TECHNICIAN
+      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr };
+      console.log('Sending Webhook:', payload.action, payload);
+
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ action: 'REMOVE_TECHNICIAN', technicianId: idStr })
+          body: JSON.stringify(payload)
       })
       .then(res => {
           if(!res.ok) throw new Error('Server returned ' + res.status);
@@ -344,14 +370,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     // 4. Save to Server
+    // ACTION: ADD_TECHNICIAN
+    const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
+    console.log('Sending Webhook:', payload.action, payload);
+
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ action: 'ADD_TECHNICIAN', technician: newTech })
+        body: JSON.stringify(payload)
     }).catch(err => console.error("Failed to sync new tech to server", err));
 
     addToast(`${tech.name} Saved! Data sent to Google Sheet.`, 'success');
     return true;
+  };
+
+  const markAttendance = (status: 'Clock In' | 'Clock Out') => {
+      if (!user) return;
+      const payload = { 
+          action: 'ATTENDANCE', 
+          technicianId: user.id,
+          technicianName: user.name,
+          status,
+          timestamp: new Date().toISOString()
+      };
+      console.log('Sending Webhook:', payload.action, payload);
+
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+  };
+
+  const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
+      if (!user) return;
+      const payload = { 
+          action: 'URGENT_ALERT',
+          technicianId: user.id, 
+          technicianName: user.name,
+          alertType: type,
+          comments,
+          timestamp: new Date().toISOString()
+      };
+      console.log('Sending Webhook:', payload.action, payload);
+      
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+  };
+
+  const resetAllTechnicianPoints = () => {
+       // Only resets locally then sends individual updates or a specific action.
+       // For now, simpler implementation usually implies manual clearing or custom action.
+       // Implementing basic local reset for visual feedback
+       setTechnicians(prev => prev.map(t => ({ ...t, points: 0 })));
+       addToast("Points reset locally. Please implement server-side logic.", 'success');
+  }
+
+  const sendReceipt = (ticketId: string) => {
+     // Placeholder for sending receipt logic
+     console.log(`Sending receipt for ${ticketId}`);
   };
 
   const refreshData = () => window.location.reload();
@@ -373,10 +453,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateTechnician, 
         deleteTechnician, 
         resetTechniciansToDefaults: () => {}, 
-        sendReceipt: () => {}, 
-        markAttendance: () => {}, 
-        sendUrgentAlert: () => {}, 
-        resetAllTechnicianPoints: () => {}, 
+        sendReceipt, 
+        markAttendance, 
+        sendUrgentAlert, 
+        resetAllTechnicianPoints, 
         syncTickets, 
         webhookStatus, 
         checkWebhookHealth, 

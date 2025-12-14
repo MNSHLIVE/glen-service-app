@@ -128,7 +128,7 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                             </button>
 
                             <button 
-                                onClick={() => runSimulation('UPDATE_TICKET', { 
+                                onClick={() => runSimulation('JOB_COMPLETED', { 
                                     ticket: {
                                         id: `TEST-${Math.floor(Math.random()*1000)}`,
                                         customerName: 'Test Customer',
@@ -144,7 +144,7 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                                 disabled={!!isSimulating}
                                 className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
                             >
-                                {isSimulating === 'UPDATE_TICKET' ? 'Sending...' : '[TEST] Job Completed'}
+                                {isSimulating === 'JOB_COMPLETED' ? 'Sending...' : '[TEST] Job Completed'}
                             </button>
 
                              <button 
@@ -169,11 +169,11 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                                 {isSimulating === 'ADD_TECHNICIAN' ? 'Adding...' : '[TEST] Add Staff'}
                             </button>
                             <button 
-                                onClick={() => runSimulation('REMOVE_TECHNICIAN', { technicianId: 'TEST-TECH-01' })}
+                                onClick={() => runSimulation('DELETE_TECHNICIAN', { technicianId: 'TEST-TECH-01' })}
                                 disabled={!!isSimulating}
                                 className="bg-red-900 hover:bg-red-800 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
                             >
-                                {isSimulating === 'REMOVE_TECHNICIAN' ? 'Deleting...' : '[TEST] Delete Staff'}
+                                {isSimulating === 'DELETE_TECHNICIAN' ? 'Deleting...' : '[TEST] Delete Staff'}
                             </button>
                         </div>
                     </div>
