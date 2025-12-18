@@ -51,6 +51,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     const handleDeleteClick = (techId: string, name: string) => {
+        console.log('UI: Delete button clicked for:', name, techId);
         if (window.confirm(`⚠️ CONFIRM DELETION\n\nAre you sure you want to permanently remove technician "${name}"?\n\nThis action cannot be undone.`)) {
             deleteTechnician(techId);
         }
@@ -102,7 +103,6 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             technicians.map(tech => (
                                 <div key={tech.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100 shadow-sm transition-all hover:border-glen-blue/30">
                                     {editingId === tech.id ? (
-                                        // EDIT MODE
                                         <div className="flex items-center space-x-3">
                                             <div className="flex-grow space-y-2">
                                                 <input 
@@ -124,7 +124,6 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                             </div>
                                         </div>
                                     ) : (
-                                        // VIEW MODE
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
                                                 <PresenceDot lastSeen={tech.lastSeen} />

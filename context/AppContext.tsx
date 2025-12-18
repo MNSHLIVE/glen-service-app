@@ -47,10 +47,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   
-  // Track optimistic updates that haven't been confirmed by server yet to prevent sync flickering
-  // added: recently added IDs
-  // deleted: recently deleted IDs
-  // updated: recently edited IDs (to prevent server overwriting local edits)
   const pendingActions = useRef<{ added: Set<string>, deleted: Set<string>, updated: Set<string> }>({ 
       added: new Set(), 
       deleted: new Set(),
@@ -59,10 +55,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const { addToast } = useToast();
   
+  const syncTickets = async (isBackground: boolean = false) => {
+    if (!user) return;
+    if (!isBackground) setIsSyncing(true);
+    
+    const payload = { action: 'FETCH_NEW_JOBS', role: user.role, technicianId: user.id };
+    if (!isBackground) console.log('Sending Webhook:', payload.action, payload);
+
+    try {
+      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.tickets && Array.isArray(data.tickets)) {
+            setTickets(data.tickets);
+            localStorage.setItem('tickets', JSON.stringify(data.tickets));
+        }
+
+        if (data.technicians && Array.isArray(data.technicians)) {
+             setTechnicians(prev => {
+                 let serverTechs = data.technicians;
+                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
+                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(String(p.id)));
+                 
+                 const combined = [...serverTechs];
+                 pendingAdds.forEach(pa => {
+                     if (!combined.find(m => String(m.id) === String(pa.id))) {
+                         combined.push(pa);
+                     }
+                 });
+
+                 const updated = combined.map((st: any) => {
+                     const idStr = String(st.id);
+                     const existing = prev.find(p => String(p.id) === idStr);
+                     if (pendingActions.current.updated.has(idStr) && existing) {
+                         return { ...existing, lastSeen: existing.lastSeen };
+                     }
+                     return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
+                 });
+                 
+                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(String(t.id)));
+                 localStorage.setItem('technicians', JSON.stringify(updated));
+                 return updated;
+             });
+        }
+
+        setLastSyncTime(new Date());
+        setWebhookStatus(WebhookStatus.Connected);
+      }
+    } catch (e) {
+        setWebhookStatus(WebhookStatus.Error);
+    } finally {
+      if (!isBackground) setIsSyncing(false);
+    }
+  };
+
   const sendHeartbeat = useCallback(() => {
       if (!user || user.role !== UserRole.Technician) return;
-      const webhookUrl = APP_CONFIG.MASTER_WEBHOOK_URL;
-      
       const payload = {
           action: 'HEARTBEAT',
           technicianId: user.id,
@@ -71,9 +125,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       
-      // console.log('Sending Webhook:', payload.action, payload); // Optional: verbose logging
-
-      fetch(webhookUrl, {
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -88,7 +140,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
         const payload = { action: 'HEALTH_CHECK' };
         console.log('Sending Webhook:', payload.action, payload);
-        
         const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -151,23 +202,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           createdAt: new Date(),
           serviceBookingDate: new Date(),
       };
-      
       setTickets(prev => {
           const updated = [newTicket, ...prev];
           localStorage.setItem('tickets', JSON.stringify(updated));
           return updated;
       });
       addToast('New service ticket generated!', 'success');
-      
-      // SEND TO WEBHOOK: NEW_TICKET
       const payload = { action: 'NEW_TICKET', ticket: newTicket };
       console.log('Sending Webhook:', payload.action, payload);
-      
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      });
+      }).then(() => syncTickets(true));
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
@@ -177,106 +224,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return updated;
       });
       addToast('Job updated successfully.', 'success');
-
-      // SEND TO WEBHOOK: Check if Completed or just Updated
-      // If status is Completed, send JOB_COMPLETED, otherwise UPDATE_TICKET
       const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
-      
       const payload = { action: actionName, ticket: updatedTicket };
       console.log('Sending Webhook:', payload.action, payload);
-
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      });
-  };
-
-  const syncTickets = async (isBackground: boolean = false) => {
-    if (!user) return;
-    if (!isBackground) setIsSyncing(true);
-    
-    // SEND TO WEBHOOK: FETCH_NEW_JOBS
-    const payload = { action: 'FETCH_NEW_JOBS', role: user.role, technicianId: user.id };
-    if (!isBackground) console.log('Sending Webhook:', payload.action, payload);
-
-    try {
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // 1. Update Tickets
-        if (data.tickets && data.tickets.length > 0) {
-            setTickets(data.tickets);
-            localStorage.setItem('tickets', JSON.stringify(data.tickets));
-        }
-
-        // 2. Update Technicians List (Cloud Sync with Race Condition Protection)
-        if (data.technicians && Array.isArray(data.technicians)) {
-             setTechnicians(prev => {
-                 let serverTechs = data.technicians;
-
-                 // A. Remove any techs that are marked for deletion locally
-                 // CRITICAL: Convert IDs to string to avoid type mismatches (Sheet "123" vs App 123)
-                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
-
-                 // B. Add any techs that were added locally but are missing from server
-                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(String(p.id)));
-                 
-                 // Merge: Server techs + Pending local techs
-                 const combined = [...serverTechs];
-                 pendingAdds.forEach(pa => {
-                     // Use strict string comparison to avoid duplicates
-                     if (!combined.find(m => String(m.id) === String(pa.id))) {
-                         combined.push(pa);
-                     }
-                 });
-
-                 // C. Preserve Last Seen (local state) & Protect locally edited techs
-                 const updated = combined.map((st: any) => {
-                     const idStr = String(st.id);
-                     const existing = prev.find(p => String(p.id) === idStr);
-
-                     // If this tech was recently updated locally, keep the local version!
-                     if (pendingActions.current.updated.has(idStr) && existing) {
-                         return { ...existing, lastSeen: existing.lastSeen };
-                     }
-
-                     return {
-                         ...st,
-                         lastSeen: existing ? existing.lastSeen : undefined
-                     };
-                 });
-                 
-                 // Clean up verified adds from pending list
-                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(String(t.id)));
-
-                 localStorage.setItem('technicians', JSON.stringify(updated));
-                 return updated;
-             });
-        }
-
-        // 3. Update Presence
-        if (data.technicianStatuses && Array.isArray(data.technicianStatuses)) {
-            setTechnicians(prev => prev.map(tech => {
-                const status = data.technicianStatuses.find((s: any) => String(s.id) === String(tech.id));
-                return status ? { ...tech, lastSeen: new Date(status.lastSeen) } : tech;
-            }));
-        }
-
-        setLastSyncTime(new Date());
-        setWebhookStatus(WebhookStatus.Connected);
-      }
-    } catch (e) {
-        setWebhookStatus(WebhookStatus.Error);
-    } finally {
-      if (!isBackground) setIsSyncing(false);
-    }
+      }).then(() => syncTickets(true));
   };
 
   const login = (u: User) => { setUser(u); localStorage.setItem('currentUser', JSON.stringify(u)); sendHeartbeat(); };
@@ -284,50 +239,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const updateTechnician = (tech: Technician) => {
       const idStr = String(tech.id);
-      
-      // 1. Mark as pending update so sync doesn't revert it
       pendingActions.current.updated.add(idStr);
-      setTimeout(() => pendingActions.current.updated.delete(idStr), 120000); // 2 mins protection
-
-      // 2. Update Local State
+      setTimeout(() => pendingActions.current.updated.delete(idStr), 120000);
       setTechnicians(prev => {
           const updated = prev.map(t => String(t.id) === idStr ? tech : t);
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
-
-      // 3. Sync to Server
       const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
       console.log('Sending Webhook:', payload.action, payload);
-      
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).catch(err => console.error("Update tech failed", err));
-      
+      }).then(() => syncTickets(true))
+      .catch(err => console.error("Update tech failed", err));
       addToast('Staff details updated successfully', 'success');
   };
 
   const deleteTechnician = (id: string) => {
       const idStr = String(id);
-      
-      // 1. Mark as pending delete to prevent Sync from re-adding it immediately
+      console.log('Delete Action Triggered for ID:', idStr);
       pendingActions.current.deleted.add(idStr);
-      setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000); // Clear after 2 mins
-
-      // 2. Remove Locally (Immediate Feedback)
+      setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000);
       setTechnicians(prev => {
           const updated = prev.filter(t => String(t.id) !== idStr);
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
-
-      // 3. Remove from Server (Cloud)
-      // UPDATED ACTION: DELETE_TECHNICIAN
-      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr };
+      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
       console.log('Sending Webhook:', payload.action, payload);
-
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -335,52 +276,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
       .then(res => {
           if(!res.ok) throw new Error('Server returned ' + res.status);
+          addToast(`Technician removed from server.`, 'success');
+          syncTickets(true);
       })
       .catch(err => {
           console.error("Failed to delete tech from server", err);
           addToast("Network issue: Server deletion might have failed.", 'error');
       });
-
-      if (user && user.id === idStr) {
-          logout();
-      } else {
-          addToast(`Technician removed. Syncing...`, 'success');
-      }
+      if (user && String(user.id) === idStr) logout();
   };
 
   const addTechnician = (tech: any): boolean => {
-    // 1. Check duplicate PIN locally
     if (technicians.some(t => t.password === tech.password)) {
         addToast(`Error: PIN ${tech.password} is already used.`, 'error');
         return false;
     }
-
     const newId = `tech${Date.now()}`; 
     const newTech = { ...tech, id: newId, points: 0 };
-    
-    // 2. Mark as pending add
     pendingActions.current.added.add(newId);
-    setTimeout(() => pendingActions.current.added.delete(newId), 120000); // Clear after 2 mins
-    
-    // 3. Save Locally
+    setTimeout(() => pendingActions.current.added.delete(newId), 120000);
     setTechnicians(prev => {
         const updated = [...prev, newTech];
         localStorage.setItem('technicians', JSON.stringify(updated));
         return updated;
     });
-
-    // 4. Save to Server
-    // ACTION: ADD_TECHNICIAN
     const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
     console.log('Sending Webhook:', payload.action, payload);
-
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
+    }).then(() => {
+        addToast(`${tech.name} Saved to Server!`, 'success');
+        syncTickets(true);
     }).catch(err => console.error("Failed to sync new tech to server", err));
-
-    addToast(`${tech.name} Saved! Data sent to Google Sheet.`, 'success');
     return true;
   };
 
@@ -394,12 +323,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       console.log('Sending Webhook:', payload.action, payload);
-
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      });
+      }).then(() => syncTickets(true));
   };
 
   const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
@@ -413,7 +341,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       console.log('Sending Webhook:', payload.action, payload);
-      
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -422,15 +349,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const resetAllTechnicianPoints = () => {
-       // Only resets locally then sends individual updates or a specific action.
-       // For now, simpler implementation usually implies manual clearing or custom action.
-       // Implementing basic local reset for visual feedback
        setTechnicians(prev => prev.map(t => ({ ...t, points: 0 })));
        addToast("Points reset locally. Please implement server-side logic.", 'success');
   }
 
   const sendReceipt = (ticketId: string) => {
-     // Placeholder for sending receipt logic
      console.log(`Sending receipt for ${ticketId}`);
   };
 
@@ -438,33 +361,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{ 
-        user, 
-        tickets, 
-        technicians, 
-        feedback, 
-        isSyncing,
-        login, 
-        logout, 
-        addTicket, 
-        updateTicket, 
-        uploadDamagedPart: () => {}, 
-        addFeedback: () => {}, 
-        addTechnician, 
-        updateTechnician, 
-        deleteTechnician, 
-        resetTechniciansToDefaults: () => {}, 
-        sendReceipt, 
-        markAttendance, 
-        sendUrgentAlert, 
-        resetAllTechnicianPoints, 
-        syncTickets, 
-        webhookStatus, 
-        checkWebhookHealth, 
-        sendCustomWebhookPayload: () => {}, 
-        lastSyncTime, 
-        isAppLoading, 
-        refreshData, 
-        sendHeartbeat 
+        user, tickets, technicians, feedback, isSyncing, login, logout, addTicket, updateTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: () => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat 
     }}>
       {children}
     </AppContext.Provider>
