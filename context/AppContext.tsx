@@ -277,7 +277,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .then(res => {
           if(!res.ok) throw new Error('Server returned ' + res.status);
           addToast(`Technician removed from server.`, 'success');
-          syncTickets(true);
+          
       })
       .catch(err => {
           console.error("Failed to delete tech from server", err);
