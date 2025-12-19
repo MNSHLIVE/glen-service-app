@@ -18,6 +18,7 @@ interface AppContextType {
   logout: () => void;
   addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
   updateTicket: (updatedTicket: Ticket) => void;
+  reopenTicket: (ticketId: string, newTechId: string, notes: string) => void;
   uploadDamagedPart: (ticketId: string, imageData: string) => void;
   addFeedback: (feedbackItem: Feedback) => void;
   addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => boolean;
@@ -30,7 +31,7 @@ interface AppContextType {
   resetAllTechnicianPoints: () => void;
   syncTickets: (isBackground?: boolean) => Promise<void>;
   checkWebhookHealth: (urlOverride?: string) => Promise<void>;
-  sendCustomWebhookPayload: (action: 'NEW_TICKET' | 'JOB_COMPLETED' | 'ATTENDANCE' | 'URGENT_ALERT', payload: Record<string, any>, urlOverride?: string) => void;
+  sendCustomWebhookPayload: (action: string, payload: Record<string, any>, urlOverride?: string) => void;
   refreshData: () => void;
   sendHeartbeat: () => void;
 }
@@ -73,8 +74,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const data = await response.json();
         
         if (data.tickets && Array.isArray(data.tickets)) {
-            setTickets(data.tickets);
-            localStorage.setItem('tickets', JSON.stringify(data.tickets));
+            const parsed = data.tickets.map((t: any) => ({
+                ...t,
+                createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
+                serviceBookingDate: t.serviceBookingDate ? new Date(t.serviceBookingDate) : undefined,
+                completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+            }));
+            setTickets(parsed);
+            localStorage.setItem('tickets', JSON.stringify(parsed));
         }
 
         if (data.technicians && Array.isArray(data.technicians)) {
@@ -234,6 +241,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }).then(() => syncTickets(true));
   };
 
+  const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+
+      const updatedTicket: Ticket = {
+          ...ticket,
+          status: TicketStatus.New,
+          technicianId: newTechId,
+          adminNotes: `RE-OPENED: ${notes}${ticket.adminNotes ? ' | ' + ticket.adminNotes : ''}`,
+          isEscalated: true,
+          completedAt: undefined,
+          workDone: undefined,
+          amountCollected: undefined
+      };
+
+      setTickets(prev => {
+          const updated = prev.map(t => t.id === ticketId ? updatedTicket : t);
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
+
+      addToast('Job re-opened and escalated!', 'success');
+      const payload = { action: 'REOPEN_TICKET', ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
+  };
+
   const login = (u: User) => { setUser(u); localStorage.setItem('currentUser', JSON.stringify(u)); sendHeartbeat(); };
   const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
   
@@ -277,7 +315,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .then(res => {
           if(!res.ok) throw new Error('Server returned ' + res.status);
           addToast(`Technician removed from server.`, 'success');
-          
+          syncTickets(true);
       })
       .catch(err => {
           console.error("Failed to delete tech from server", err);
@@ -361,7 +399,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{ 
-        user, tickets, technicians, feedback, isSyncing, login, logout, addTicket, updateTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: () => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat 
+        user, tickets, technicians, feedback, isSyncing, login, logout, addTicket, updateTicket, reopenTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: (action, payload) => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat 
     }}>
       {children}
     </AppContext.Provider>

@@ -114,6 +114,7 @@ export interface Ticket {
   pointsAwarded?: boolean;
   freeService?: boolean;
   adminNotes?: string;
+  isEscalated?: boolean; // New: Tracks if a job was re-opened due to dissatisfaction
 }
 
 export interface Feedback {
