@@ -50,15 +50,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const { addToast } = useToast();
   
+  // PRIMARY SYNC ENGINE - Matches the "SYNC" node in n8n
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
     
     const payload = { 
-        action: 'FETCH_NEW_JOBS', 
+        action: 'SYNC_ALL_DATA', // Match user's new n8n node name
         role: user.role, 
         technicianId: user.id,
-        syncOrigin: 'Device_Cloud_Handshake'
+        syncOrigin: 'PANDIT_GLEN_APP_SYNC'
     };
     
     try {
@@ -71,7 +72,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
-        // Update Jobs
         if (data.tickets && Array.isArray(data.tickets)) {
             const parsed = data.tickets.map((t: any) => ({
                 ...t,
@@ -83,7 +83,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('tickets', JSON.stringify(parsed));
         }
 
-        // Update Staff - Cloud is the source of truth
         if (data.technicians && Array.isArray(data.technicians)) {
              const serverTechs = data.technicians.map((st: any) => {
                  const idStr = String(st.id);
@@ -105,7 +104,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // AUTO-SYNC TIMER: Runs every 30 seconds to keep devices aligned
   useEffect(() => {
     if (user) {
         const interval = setInterval(() => {
@@ -161,7 +159,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setUser(currentUser);
             }
 
-            // Restore from cache first for speed
             const savedTechs = localStorage.getItem('technicians');
             if (savedTechs) {
                 setTechnicians(JSON.parse(savedTechs).map((t: any) => ({
@@ -223,13 +220,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteTechnician = async (id: string) => {
       const idStr = String(id);
-      console.log('Requesting deletion of tech:', idStr);
-      
-      const payload = { 
-          action: 'DELETE_TECHNICIAN', 
-          technicianId: idStr, 
-          id: idStr 
-      };
+      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr };
 
       try {
           const res = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -240,13 +231,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           if (res.ok) {
               addToast(`Technician removed successfully`, 'success');
-              // FORCE REFRESH FROM SERVER TO PROVE IT'S GONE
               await syncTickets(false);
-          } else {
-              throw new Error('Server deletion failed');
           }
       } catch (err) {
-          addToast("Server failed to delete technician. Check network.", 'error');
+          addToast("Server connection error.", 'error');
       }
   };
 
@@ -268,7 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (res.ok) {
             addToast(`${tech.name} added to server!`, 'success');
-            await syncTickets(false); // Fetch new list to align devices
+            await syncTickets(false);
             return true;
         } else {
             addToast("Server failed to save new technician.", 'error');
@@ -288,14 +276,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           createdAt: new Date(),
           serviceBookingDate: new Date(),
       };
+      // LOGIC CHECK: This sends the NEW_TICKET action clearly
       const payload = { action: 'NEW_TICKET', ticket: newTicket };
+      console.log('--- SUBMITTING NEW TICKET ---');
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
       }).then(() => {
           addToast('Ticket created on server', 'success');
-          syncTickets(true);
+          syncTickets(true); // Background refresh
       });
   };
 
