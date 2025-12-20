@@ -21,7 +21,7 @@ interface AppContextType {
   reopenTicket: (ticketId: string, newTechId: string, notes: string) => void;
   uploadDamagedPart: (ticketId: string, imageData: string) => void;
   addFeedback: (feedbackItem: Feedback) => void;
-  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => boolean;
+  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => Promise<boolean>;
   updateTechnician: (updatedTech: Technician) => void;
   deleteTechnician: (techId: string) => void;
   resetTechniciansToDefaults: () => void;
@@ -48,21 +48,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   
-  const pendingActions = useRef<{ added: Set<string>, deleted: Set<string>, updated: Set<string> }>({ 
-      added: new Set(), 
-      deleted: new Set(),
-      updated: new Set()
-  });
-
   const { addToast } = useToast();
   
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
     
-    const payload = { action: 'FETCH_NEW_JOBS', role: user.role, technicianId: user.id };
-    if (!isBackground) console.log('Sending Webhook:', payload.action, payload);
-
+    const payload = { 
+        action: 'FETCH_NEW_JOBS', 
+        role: user.role, 
+        technicianId: user.id,
+        syncOrigin: 'Device_Cloud_Handshake'
+    };
+    
     try {
       const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
@@ -73,6 +71,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
+        // Update Jobs
         if (data.tickets && Array.isArray(data.tickets)) {
             const parsed = data.tickets.map((t: any) => ({
                 ...t,
@@ -84,43 +83,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('tickets', JSON.stringify(parsed));
         }
 
+        // Update Staff - Cloud is the source of truth
         if (data.technicians && Array.isArray(data.technicians)) {
-             setTechnicians(prev => {
-                 let serverTechs = data.technicians;
-                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
-                 const pendingAdds = prev.filter(p => pendingActions.current.added.has(String(p.id)));
-                 
-                 const combined = [...serverTechs];
-                 pendingAdds.forEach(pa => {
-                     if (!combined.find(m => String(m.id) === String(pa.id))) {
-                         combined.push(pa);
-                     }
-                 });
-
-                 const updated = combined.map((st: any) => {
-                     const idStr = String(st.id);
-                     const existing = prev.find(p => String(p.id) === idStr);
-                     if (pendingActions.current.updated.has(idStr) && existing) {
-                         return { ...existing, lastSeen: existing.lastSeen };
-                     }
-                     return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
-                 });
-                 
-                 data.technicians.forEach((t: any) => pendingActions.current.added.delete(String(t.id)));
-                 localStorage.setItem('technicians', JSON.stringify(updated));
-                 return updated;
+             const serverTechs = data.technicians.map((st: any) => {
+                 const idStr = String(st.id);
+                 const existing = technicians.find(p => String(p.id) === idStr);
+                 return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
              });
+             setTechnicians(serverTechs);
+             localStorage.setItem('technicians', JSON.stringify(serverTechs));
         }
 
         setLastSyncTime(new Date());
         setWebhookStatus(WebhookStatus.Connected);
       }
     } catch (e) {
+        console.error('Cloud Sync Failed:', e);
         setWebhookStatus(WebhookStatus.Error);
     } finally {
       if (!isBackground) setIsSyncing(false);
     }
   };
+
+  // AUTO-SYNC TIMER: Runs every 30 seconds to keep devices aligned
+  useEffect(() => {
+    if (user) {
+        const interval = setInterval(() => {
+            syncTickets(true);
+        }, 30000); 
+        return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const sendHeartbeat = useCallback(() => {
       if (!user || user.role !== UserRole.Technician) return;
@@ -146,7 +139,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setWebhookStatus(WebhookStatus.Checking);
     try {
         const payload = { action: 'HEALTH_CHECK' };
-        console.log('Sending Webhook:', payload.action, payload);
         const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -160,46 +152,133 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   useEffect(() => {
-    try {
-      const savedUser = localStorage.getItem('currentUser');
-      if (savedUser) setUser(JSON.parse(savedUser));
+    const initApp = async () => {
+        try {
+            const savedUser = localStorage.getItem('currentUser');
+            let currentUser = null;
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                setUser(currentUser);
+            }
 
-      let initialTechs = [...TECHNICIANS];
-      const savedTechs = localStorage.getItem('technicians');
-      if (savedTechs) {
-        const parsedTechs = JSON.parse(savedTechs);
-        if (Array.isArray(parsedTechs)) {
-             initialTechs = parsedTechs.map((t: any) => ({
-                 ...t,
-                 lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
-             }));
-        }
-      } else {
-          localStorage.setItem('technicians', JSON.stringify(initialTechs));
-      }
-      setTechnicians(initialTechs);
+            // Restore from cache first for speed
+            const savedTechs = localStorage.getItem('technicians');
+            if (savedTechs) {
+                setTechnicians(JSON.parse(savedTechs).map((t: any) => ({
+                    ...t, lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
+                })));
+            } else {
+                setTechnicians(TECHNICIANS);
+            }
 
-      const savedTickets = localStorage.getItem('tickets');
-      if (savedTickets) {
-        const parsedTickets = JSON.parse(savedTickets, (key, value) => {
-          if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
-          return value;
-        });
-        if (Array.isArray(parsedTickets) && parsedTickets.length > 0) {
-            setTickets(parsedTickets);
-        } else {
-            setTickets(INITIAL_TICKETS);
+            const savedTickets = localStorage.getItem('tickets');
+            if (savedTickets) {
+                setTickets(JSON.parse(savedTickets, (key, value) => {
+                    if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
+                    return value;
+                }));
+            } else {
+                setTickets(INITIAL_TICKETS);
+            }
+
+            if (currentUser) {
+                await syncTickets(false);
+            }
+        } catch (error) {
+            console.error('App init fail:', error);
+        } finally {
+            setIsAppLoading(false);
+            checkWebhookHealth();
         }
-      } else {
-          setTickets(INITIAL_TICKETS);
-      }
-    } catch (error) {
-        console.error('App init fail:', error);
-    } finally {
-        setIsAppLoading(false);
-        checkWebhookHealth();
-    }
+    };
+
+    initApp();
   }, [checkWebhookHealth]);
+
+  const login = (u: User) => { 
+      setUser(u); 
+      localStorage.setItem('currentUser', JSON.stringify(u)); 
+      sendHeartbeat();
+      syncTickets(false); 
+  };
+
+  const logout = () => { 
+      setUser(null); 
+      localStorage.removeItem('currentUser'); 
+  };
+  
+  const updateTechnician = (tech: Technician) => {
+      const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(res => {
+          if(res.ok) {
+              addToast('Staff details updated on server', 'success');
+              syncTickets(true);
+          }
+      });
+  };
+
+  const deleteTechnician = async (id: string) => {
+      const idStr = String(id);
+      console.log('Requesting deletion of tech:', idStr);
+      
+      const payload = { 
+          action: 'DELETE_TECHNICIAN', 
+          technicianId: idStr, 
+          id: idStr 
+      };
+
+      try {
+          const res = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              addToast(`Technician removed successfully`, 'success');
+              // FORCE REFRESH FROM SERVER TO PROVE IT'S GONE
+              await syncTickets(false);
+          } else {
+              throw new Error('Server deletion failed');
+          }
+      } catch (err) {
+          addToast("Server failed to delete technician. Check network.", 'error');
+      }
+  };
+
+  const addTechnician = async (tech: any): Promise<boolean> => {
+    if (technicians.some(t => t.password === tech.password)) {
+        addToast(`Error: PIN ${tech.password} is already used.`, 'error');
+        return false;
+    }
+    
+    const newTech = { ...tech, id: `tech${Date.now()}`, points: 0 };
+    const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
+
+    try {
+        const res = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            addToast(`${tech.name} added to server!`, 'success');
+            await syncTickets(false); // Fetch new list to align devices
+            return true;
+        } else {
+            addToast("Server failed to save new technician.", 'error');
+            return false;
+        }
+    } catch (err) {
+        addToast("Network Error: Could not reach server.", 'error');
+        return false;
+    }
+  };
 
   const addTicket = (ticketData: any) => {
       const newTicket: Ticket = {
@@ -209,36 +288,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           createdAt: new Date(),
           serviceBookingDate: new Date(),
       };
-      setTickets(prev => {
-          const updated = [newTicket, ...prev];
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
-      addToast('New service ticket generated!', 'success');
       const payload = { action: 'NEW_TICKET', ticket: newTicket };
-      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(() => {
+          addToast('Ticket created on server', 'success');
+          syncTickets(true);
+      });
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
-      setTickets(prev => {
-          const updated = prev.map(t => t.id === updatedTicket.id ? updatedTicket : t);
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
-      addToast('Job updated successfully.', 'success');
       const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
       const payload = { action: actionName, ticket: updatedTicket };
-      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(() => {
+          addToast('Job status updated', 'success');
+          syncTickets(true);
+      });
   };
 
   const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
@@ -256,99 +327,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           amountCollected: undefined
       };
 
-      setTickets(prev => {
-          const updated = prev.map(t => t.id === ticketId ? updatedTicket : t);
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
-
-      addToast('Job re-opened and escalated!', 'success');
       const payload = { action: 'REOPEN_TICKET', ticket: updatedTicket };
-      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
-  };
-
-  const login = (u: User) => { setUser(u); localStorage.setItem('currentUser', JSON.stringify(u)); sendHeartbeat(); };
-  const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
-  
-  const updateTechnician = (tech: Technician) => {
-      const idStr = String(tech.id);
-      pendingActions.current.updated.add(idStr);
-      setTimeout(() => pendingActions.current.updated.delete(idStr), 120000);
-      setTechnicians(prev => {
-          const updated = prev.map(t => String(t.id) === idStr ? tech : t);
-          localStorage.setItem('technicians', JSON.stringify(updated));
-          return updated;
-      });
-      const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
-      console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload)
-      }).then(() => syncTickets(true))
-      .catch(err => console.error("Update tech failed", err));
-      addToast('Staff details updated successfully', 'success');
-  };
-
-  const deleteTechnician = (id: string) => {
-      const idStr = String(id);
-      console.log('Delete Action Triggered for ID:', idStr);
-      pendingActions.current.deleted.add(idStr);
-      setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000);
-      setTechnicians(prev => {
-          const updated = prev.filter(t => String(t.id) !== idStr);
-          localStorage.setItem('technicians', JSON.stringify(updated));
-          return updated;
-      });
-      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
-      console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload)
-      })
-      .then(res => {
-          if(!res.ok) throw new Error('Server returned ' + res.status);
-          addToast(`Technician removed from server.`, 'success');
+      }).then(() => {
+          addToast('Escalation sent to server', 'success');
           syncTickets(true);
-      })
-      .catch(err => {
-          console.error("Failed to delete tech from server", err);
-          addToast("Network issue: Server deletion might have failed.", 'error');
       });
-      if (user && String(user.id) === idStr) logout();
-  };
-
-  const addTechnician = (tech: any): boolean => {
-    if (technicians.some(t => t.password === tech.password)) {
-        addToast(`Error: PIN ${tech.password} is already used.`, 'error');
-        return false;
-    }
-    const newId = `tech${Date.now()}`; 
-    const newTech = { ...tech, id: newId, points: 0 };
-    pendingActions.current.added.add(newId);
-    setTimeout(() => pendingActions.current.added.delete(newId), 120000);
-    setTechnicians(prev => {
-        const updated = [...prev, newTech];
-        localStorage.setItem('technicians', JSON.stringify(updated));
-        return updated;
-    });
-    const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
-    console.log('Sending Webhook:', payload.action, payload);
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    }).then(() => {
-        addToast(`${tech.name} Saved to Server!`, 'success');
-        syncTickets(true);
-    }).catch(err => console.error("Failed to sync new tech to server", err));
-    return true;
   };
 
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
@@ -360,7 +347,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           status,
           timestamp: new Date().toISOString()
       };
-      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -378,7 +364,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           comments,
           timestamp: new Date().toISOString()
       };
-      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -387,8 +372,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const resetAllTechnicianPoints = () => {
-       setTechnicians(prev => prev.map(t => ({ ...t, points: 0 })));
-       addToast("Points reset locally. Please implement server-side logic.", 'success');
+       addToast("Points reset feature must be configured in n8n.", 'error');
   }
 
   const sendReceipt = (ticketId: string) => {
