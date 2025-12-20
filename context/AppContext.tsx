@@ -50,16 +50,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const { addToast } = useToast();
   
-  // PRIMARY SYNC ENGINE - Matches the "SYNC" node in n8n
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
     
     const payload = { 
-        action: 'SYNC_ALL_DATA', // Match user's new n8n node name
+        action: 'SYNC_ALL_DATA',
         role: user.role, 
         technicianId: user.id,
-        syncOrigin: 'PANDIT_GLEN_APP_SYNC'
+        syncOrigin: 'GLOBAL_HANDSHAKE'
     };
     
     try {
@@ -72,23 +71,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
+        // 1. OVERWRITE TICKETS (No merging, just latest from server)
         if (data.tickets && Array.isArray(data.tickets)) {
             const parsed = data.tickets.map((t: any) => ({
                 ...t,
                 createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
                 serviceBookingDate: t.serviceBookingDate ? new Date(t.serviceBookingDate) : undefined,
                 completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
-            }));
+            })).sort((a, b) => {
+                // SORT: Newest at the top
+                const dateA = a.createdAt?.getTime() || 0;
+                const dateB = b.createdAt?.getTime() || 0;
+                return dateB - dateA;
+            });
+
             setTickets(parsed);
             localStorage.setItem('tickets', JSON.stringify(parsed));
         }
 
+        // 2. OVERWRITE STAFF (Ensure deletions reflect on all devices)
         if (data.technicians && Array.isArray(data.technicians)) {
-             const serverTechs = data.technicians.map((st: any) => {
-                 const idStr = String(st.id);
-                 const existing = technicians.find(p => String(p.id) === idStr);
-                 return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
-             });
+             const serverTechs = data.technicians.map((st: any) => ({
+                 ...st,
+                 // Preserve local "points" if server doesn't provide them, but usually server is boss
+                 points: st.points !== undefined ? st.points : 0
+             }));
              setTechnicians(serverTechs);
              localStorage.setItem('technicians', JSON.stringify(serverTechs));
         }
@@ -97,13 +104,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setWebhookStatus(WebhookStatus.Connected);
       }
     } catch (e) {
-        console.error('Cloud Sync Failed:', e);
+        console.error('Handshake Failed:', e);
         setWebhookStatus(WebhookStatus.Error);
     } finally {
       if (!isBackground) setIsSyncing(false);
     }
   };
 
+  // Sync every 30 seconds to keep all devices on the same page
   useEffect(() => {
     if (user) {
         const interval = setInterval(() => {
@@ -114,7 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [user]);
 
   const sendHeartbeat = useCallback(() => {
-      if (!user || user.role !== UserRole.Technician) return;
+      if (!user) return;
       const payload = {
           action: 'HEARTBEAT',
           technicianId: user.id,
@@ -159,25 +167,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setUser(currentUser);
             }
 
+            // Start with local cache for speed
             const savedTechs = localStorage.getItem('technicians');
-            if (savedTechs) {
-                setTechnicians(JSON.parse(savedTechs).map((t: any) => ({
-                    ...t, lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
-                })));
-            } else {
-                setTechnicians(TECHNICIANS);
-            }
+            if (savedTechs) setTechnicians(JSON.parse(savedTechs));
+            else setTechnicians(TECHNICIANS);
 
             const savedTickets = localStorage.getItem('tickets');
             if (savedTickets) {
                 setTickets(JSON.parse(savedTickets, (key, value) => {
-                    if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
+                    if (['createdAt', 'serviceBookingDate', 'completedAt'].includes(key)) return value ? new Date(value) : undefined;
                     return value;
                 }));
             } else {
                 setTickets(INITIAL_TICKETS);
             }
 
+            // Immediately force a cloud update if logged in
             if (currentUser) {
                 await syncTickets(false);
             }
@@ -212,7 +217,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           body: JSON.stringify(payload)
       }).then(res => {
           if(res.ok) {
-              addToast('Staff details updated on server', 'success');
+              addToast('Staff details updated', 'success');
               syncTickets(true);
           }
       });
@@ -230,8 +235,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
 
           if (res.ok) {
-              addToast(`Technician removed successfully`, 'success');
-              await syncTickets(false);
+              addToast(`Removed from server`, 'success');
+              await syncTickets(false); // Force full re-sync to remove from UI
           }
       } catch (err) {
           addToast("Server connection error.", 'error');
@@ -255,15 +260,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
 
         if (res.ok) {
-            addToast(`${tech.name} added to server!`, 'success');
+            addToast(`${tech.name} added to cloud!`, 'success');
             await syncTickets(false);
             return true;
         } else {
-            addToast("Server failed to save new technician.", 'error');
+            addToast("Server failed to save.", 'error');
             return false;
         }
     } catch (err) {
-        addToast("Network Error: Could not reach server.", 'error');
+        addToast("Network Error.", 'error');
         return false;
     }
   };
@@ -276,16 +281,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           createdAt: new Date(),
           serviceBookingDate: new Date(),
       };
-      // LOGIC CHECK: This sends the NEW_TICKET action clearly
       const payload = { action: 'NEW_TICKET', ticket: newTicket };
-      console.log('--- SUBMITTING NEW TICKET ---');
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
       }).then(() => {
-          addToast('Ticket created on server', 'success');
-          syncTickets(true); // Background refresh
+          addToast('Ticket sent to cloud', 'success');
+          syncTickets(true); 
       });
   };
 
@@ -297,7 +300,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
       }).then(() => {
-          addToast('Job status updated', 'success');
+          addToast('Updated successfully', 'success');
           syncTickets(true);
       });
   };
@@ -323,7 +326,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
       }).then(() => {
-          addToast('Escalation sent to server', 'success');
+          addToast('Escalation saved', 'success');
           syncTickets(true);
       });
   };
@@ -362,7 +365,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const resetAllTechnicianPoints = () => {
-       addToast("Points reset feature must be configured in n8n.", 'error');
+       addToast("Cloud reset required via n8n.", 'error');
   }
 
   const sendReceipt = (ticketId: string) => {
