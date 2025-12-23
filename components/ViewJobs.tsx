@@ -43,31 +43,5 @@ const ViewJobs: React.FC<ViewJobsProps> = ({ onViewTicket }) => {
       
       {tickets.length > 0 ? (
         <div className="space-y-8">
-          {Object.entries(groupedTickets).map(([date, jobs]) => (
-            <div key={date} className="space-y-4">
-              <h4 className="text-[11px] font-bold text-glen-blue uppercase tracking-[0.2em] border-b border-glen-blue/10 pb-2 ml-1">
-                {date}
-              </h4>
-              <div className="space-y-4">
-                {/* Fix: jobs is now correctly typed as Ticket[] through the typed groupedTickets object */}
-                {jobs.map(ticket => (
-                  <JobCard key={ticket.id} ticket={ticket} onViewDetails={onViewTicket} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-16 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-             <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-          </div>
-          <p className="text-gray-500 font-bold">No active tickets</p>
-          <p className="text-xs text-gray-400 mt-1">Assignments from n8n will appear here.</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default ViewJobs;
+          {/* Fix: Explicitly cast Object.entries result to ensure 'jobs' is correctly inferred as Ticket[] */}
+          {(Object.entries(groupedTickets) as Array<[string, Ticket[
