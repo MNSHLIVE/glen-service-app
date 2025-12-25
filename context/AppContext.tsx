@@ -1,206 +1,63 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
-import { User, Ticket, Feedback, Technician, TicketStatus, WebhookStatus, UrgentAlertType } from '../types';
-import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
-import { useToast } from './ToastContext';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode
+} from 'react';
+
+import {
+  User,
+  Ticket,
+  Technician,
+  TicketStatus,
+  WebhookStatus,
+  UrgentAlertType
+} from '../types';
+
 import { APP_CONFIG, APP_VERSION } from '../config';
+import { useToast } from './ToastContext';
+
+/* ================= CONTEXT TYPE ================= */
 
 interface AppContextType {
   user: User | null;
   tickets: Ticket[];
   technicians: Technician[];
-  feedback: Feedback[];
-  isSyncing: boolean;
-  isAppLoading: boolean;
   webhookStatus: WebhookStatus;
-  lastSyncTime: Date | null;
+  isAppLoading: boolean;
+
   login: (user: User) => void;
   logout: () => void;
-  addTicket: (ticket: any) => void;
-  updateTicket: (updatedTicket: Ticket) => void;
+
+  addTicket: (data: any) => Promise<void>;
+  updateTicket: (ticket: Ticket) => Promise<void>;
   reopenTicket: (ticketId: string, newTechId: string, notes: string) => void;
-  markAttendance: (status: 'Clock In' | 'Clock Out') => void;
-  sendUrgentAlert: (type: UrgentAlertType, comments: string) => void;
-  syncTickets: (isBackground?: boolean) => Promise<void>;
-  checkWebhookHealth: () => Promise<void>;
-  refreshData: () => void;
-  sendHeartbeat: () => void;
+
+  addTechnician: (tech: any) => Promise<boolean>;
+  deleteTechnician: (techId: string) => Promise<boolean>;
+
+  markAttendance: (status: 'Clock In' | 'Clock Out') => Promise<void>;
+  sendUrgentAlert: (type: UrgentAlertType, comments: string) => Promise<void>;
+  sendHeartbeat: () => Promise<void>;
 }
+
+/* ================= CONTEXT ================= */
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+/* ================= PROVIDER ================= */
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { addToast } = useToast();
+
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [feedback, setFeedback] = useState<Feedback[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [webhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [isAppLoading, setIsAppLoading] = useState(true);
-  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
-  const { addToast } = useToast();
-  const lastSyncRef = useRef({ time: 0 });
-
-  /* -------------------- ADD TICKET (FINAL & CORRECT) -------------------- */
-  const addTicket = (ticketData: any) => {
-    const ticketId = `PG-${Math.floor(1000 + Math.random() * 9000)}`;
-    const createdAtISO = new Date().toISOString();
-
-    // 1️⃣ SEND TO CLOUD (n8n → Google Sheet)
-    const payload = {
-      action: 'NEW_TICKET',
-      "Ticket ID": ticketId,
-      "Created At": createdAtISO,
-      "Service Booking Date": createdAtISO,
-      "Preferred Time": ticketData.preferredTime,
-      "Customer Name": ticketData.customerName,
-      "Phone": ticketData.phone,
-      "Address": ticketData.address,
-      "Service Category": ticketData.serviceCategory,
-      "Complaint": ticketData.complaint,
-      "Assigned Technician": ticketData.technicianId,
-      "Status": "New Ticket"
-    };
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(() => {
-      addToast('Ticket sent to cloud', 'success');
-    });
-
-    // 2️⃣ ADD TO LOCAL UI (THIS MAKES IT VISIBLE)
-    const localTicket: Ticket = {
-      id: ticketId,
-      customerName: ticketData.customerName,
-      phone: ticketData.phone,
-      address: ticketData.address,
-      serviceCategory: ticketData.serviceCategory,
-      complaint: ticketData.complaint,
-      technicianId: ticketData.technicianId,
-      preferredTime: ticketData.preferredTime,
-      status: TicketStatus.New,
-      createdAt: new Date(createdAtISO),
-      serviceBookingDate: new Date(createdAtISO),
-    };
-
-    setTickets(prev => [localTicket, ...prev]);
-  };
-
-  /* -------------------- UPDATE / COMPLETE JOB -------------------- */
-  const updateTicket = (updatedTicket: Ticket) => {
-  if (updatedTicket.status !== TicketStatus.Completed) return;
-
-  const payload = {
-    action: 'JOB_COMPLETED',
-
-    // ✅ MUST MATCH SHEET HEADERS EXACTLY
-    "Ticket ID": updatedTicket.id,
-    "Completed At": updatedTicket.completedAt || new Date().toISOString(),
-    "Technician Name": updatedTicket.technicianName || updatedTicket.technicianId,
-
-    "Work Done Summary": updatedTicket.workDone || "",
-    "Amount Collected": updatedTicket.amountCollected || 0,
-    "Payment Status": updatedTicket.paymentStatus || "",
-
-    "Points Awarded": updatedTicket.pointsAwarded || 0,
-
-    "Parts Replaced": (updatedTicket.partsReplaced || [])
-      .map(p => p.name)
-      .join(', '),
-
-    "AMC Discussion": updatedTicket.serviceChecklist?.amcDiscussion
-      ? "Discussed AMC plan"
-      : "Not Discussed",
-
-    "Free Service": updatedTicket.freeService ? "Yes" : "No"
-  };
-
-  fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(() => {
-    addToast('Job completed & sheet updated', 'success');
-  });
-};
-
-  const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
-    const ticket = tickets.find(t => t.id === ticketId);
-    if (!ticket) return;
-
-    const updatedTicket: Ticket = {
-      ...ticket,
-      status: TicketStatus.New,
-      technicianId: newTechId,
-      adminNotes: notes,
-      completedAt: undefined
-    };
-
-    updateTicket(updatedTicket);
-  };
-
-  /* -------------------- SYNC & HEALTH -------------------- */
-  const syncTickets = async () => {};
-  const checkWebhookHealth = async () => {
-    try {
-      await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'HEALTH_CHECK' })
-      });
-      setWebhookStatus(WebhookStatus.Connected);
-    } catch {
-      setWebhookStatus(WebhookStatus.Error);
-    }
-  };
-
-  const sendHeartbeat = () => {
-    if (!user) return;
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'HEARTBEAT',
-        technicianId: user.id,
-        technicianName: user.name,
-        version: APP_VERSION,
-        timestamp: new Date().toISOString()
-      })
-    });
-  };
-
-  const markAttendance = (status: 'Clock In' | 'Clock Out') => {
-    if (!user) return;
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'ATTENDANCE',
-        technicianId: user.id,
-        technicianName: user.name,
-        status,
-        timestamp: new Date().toISOString()
-      })
-    });
-  };
-
-  const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
-    if (!user) return;
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'URGENT_ALERT',
-        technicianId: user.id,
-        technicianName: user.name,
-        alertType: type,
-        comments,
-        timestamp: new Date().toISOString()
-      })
-    });
-  };
+  /* ================= AUTH ================= */
 
   const login = (u: User) => {
     setUser(u);
@@ -212,14 +69,211 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('currentUser');
   };
 
-  const refreshData = () => window.location.reload();
+  /* ================= LOAD TECHNICIANS (STABLE) ================= */
 
   useEffect(() => {
-    setTechnicians(TECHNICIANS);
-    setTickets(INITIAL_TICKETS);
+    const saved = localStorage.getItem('technicians');
+    if (saved) {
+      setTechnicians(JSON.parse(saved));
+    }
     setIsAppLoading(false);
-    checkWebhookHealth();
   }, []);
+
+  /* ================= SAVE TECHNICIANS ================= */
+
+  useEffect(() => {
+    localStorage.setItem('technicians', JSON.stringify(technicians));
+  }, [technicians]);
+
+  /* ================= TECHNICIANS ================= */
+
+  const addTechnician = async (tech: any): Promise<boolean> => {
+    try {
+      const newTech: Technician = {
+        id: `TECH-${Date.now()}`,
+        name: tech.name,
+        phone: tech.phone || '',
+        points: 0
+      };
+
+      // UI update immediately
+      setTechnicians(prev => [...prev, newTech]);
+
+      addToast(
+        `Technician added. PIN: ${newTech.id.slice(-4)}`,
+        'success'
+      );
+
+      // Optional backend sync (won’t break UI if fails)
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ADD_TECHNICIAN',
+          technician: newTech
+        })
+      }).catch(() => {});
+
+      return true;
+    } catch {
+      addToast('Failed to add technician', 'error');
+      return false;
+    }
+  };
+
+  const deleteTechnician = async (techId: string): Promise<boolean> => {
+    try {
+      setTechnicians(prev => prev.filter(t => t.id !== techId));
+      addToast('Technician removed', 'success');
+
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_TECHNICIAN',
+          technicianId: techId
+        })
+      }).catch(() => {});
+
+      return true;
+    } catch {
+      addToast('Failed to delete technician', 'error');
+      return false;
+    }
+  };
+
+  /* ================= TICKETS ================= */
+
+  const addTicket = async (data: any) => {
+    const ticketId = `PG-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date().toISOString();
+
+    setTickets(prev => [
+      {
+        id: ticketId,
+        customerName: data.customerName,
+        phone: data.phone,
+        address: data.address,
+        serviceCategory: data.serviceCategory,
+        complaint: data.complaint,
+        technicianId: data.technicianId,
+        preferredTime: data.preferredTime,
+        status: TicketStatus.New,
+        createdAt: new Date(now),
+        serviceBookingDate: new Date(now)
+      },
+      ...prev
+    ]);
+
+    addToast('Ticket created', 'success');
+
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'NEW_TICKET',
+        'Ticket ID': ticketId,
+        'Created At': now,
+        'Service Booking Date': now,
+        'Preferred Time': data.preferredTime,
+        'Customer Name': data.customerName,
+        Phone: data.phone,
+        Address: data.address,
+        'Service Category': data.serviceCategory,
+        Complaint: data.complaint,
+        'Assigned Technician': data.technicianId,
+        Status: 'New Ticket'
+      })
+    }).catch(() => {});
+  };
+
+  const updateTicket = async (ticket: Ticket) => {
+    if (ticket.status !== TicketStatus.Completed) return;
+
+    setTickets(prev =>
+      prev.map(t => (t.id === ticket.id ? ticket : t))
+    );
+
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'JOB_COMPLETED',
+        'Ticket ID': ticket.id,
+        'Completed At': ticket.completedAt || new Date().toISOString(),
+        'Technician Name': ticket.technicianId
+      })
+    }).catch(() => {});
+  };
+
+  const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
+    setTickets(prev =>
+      prev.map(t =>
+        t.id === ticketId
+          ? {
+              ...t,
+              status: TicketStatus.New,
+              technicianId: newTechId,
+              adminNotes: notes,
+              completedAt: undefined
+            }
+          : t
+      )
+    );
+  };
+
+  /* ================= FIELD ACTIONS ================= */
+
+  const markAttendance = async (status: 'Clock In' | 'Clock Out') => {
+    if (!user) return;
+
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'ATTENDANCE',
+        technicianId: user.id,
+        technicianName: user.name,
+        status,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {});
+  };
+
+  const sendUrgentAlert = async (type: UrgentAlertType, comments: string) => {
+    if (!user) return;
+
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'URGENT_ALERT',
+        technicianId: user.id,
+        technicianName: user.name,
+        alertType: type,
+        comments,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {});
+  };
+
+  const sendHeartbeat = async () => {
+    if (!user) return;
+
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'HEARTBEAT',
+        technicianId: user.id,
+        technicianName: user.name,
+        version: APP_VERSION,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {});
+  };
+
+  /* ================= PROVIDER ================= */
 
   return (
     <AppContext.Provider
@@ -227,21 +281,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         user,
         tickets,
         technicians,
-        feedback,
-        isSyncing,
-        isAppLoading,
         webhookStatus,
-        lastSyncTime,
+        isAppLoading,
         login,
         logout,
         addTicket,
         updateTicket,
         reopenTicket,
+        addTechnician,
+        deleteTechnician,
         markAttendance,
         sendUrgentAlert,
-        syncTickets,
-        checkWebhookHealth,
-        refreshData,
         sendHeartbeat
       }}
     >
@@ -250,8 +300,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
+/* ================= HOOK ================= */
+
 export const useAppContext = () => {
-  const context = useContext(AppContext);
-  if (!context) throw new Error('useAppContext missing');
-  return context;
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useAppContext must be used inside AppProvider');
+  return ctx;
 };
