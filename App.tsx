@@ -1,3 +1,4 @@
+// TEMP DEBUG – UI FORCE RENDER
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
@@ -40,9 +41,9 @@ const App: React.FC = () => {
   // PRESENCE HEARTBEAT INTERVAL
   useEffect(() => {
     if (user && user.role === UserRole.Technician) {
-        sendHeartbeat();
-        const interval = setInterval(sendHeartbeat, 120000); // Every 2 mins
-        return () => clearInterval(interval);
+        // sendHeartbeat();
+        // const interval = setInterval(sendHeartbeat, 120000); // Every 2 mins
+        // return () => clearInterval(interval);
     }
   }, [user, sendHeartbeat]);
 
@@ -53,8 +54,14 @@ const App: React.FC = () => {
           setDiagnosticTaps(0);
       }
   };
+// if (isAppLoading) {
+//   return (
+//     <div className="min-h-screen flex items-center justify-center font-sans text-glen-blue font-bold">
+//       Initializing Pandit Glen...
+//     </div>
+//   );
+// }
 
-  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center font-sans text-glen-blue font-bold">Initializing Pandit Glen...</div>;
 
   const renderContent = () => {
     if (!user) return <LoginScreen />;

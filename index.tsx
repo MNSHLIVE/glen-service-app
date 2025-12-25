@@ -1,13 +1,16 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppProvider } from './context/AppContext';
 import { ToastProvider } from './context/ToastContext';
 
-// Register Service Worker for PWA functionality
+// OPTIONAL: Service Worker (keep disabled for now to avoid caching issues)
+// You can re-enable later for PWA
+/*
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker
+      .register('/service-worker.js')
       .then(registration => {
         console.log('Service Worker registered with scope:', registration.scope);
       })
@@ -16,20 +19,20 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
-
+*/
 
 const rootElement = document.getElementById('root');
+
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error('Root element not found');
 }
 
-const root = ReactDOM.createRoot(rootElement);
+const root = createRoot(rootElement);
+
 root.render(
-  <React.StrictMode>
-    <ToastProvider>
-      <AppProvider>
-        <App />
-      </AppProvider>
-    </ToastProvider>
-  </React.StrictMode>
+  <ToastProvider>
+    <AppProvider>
+      <App />
+    </AppProvider>
+  </ToastProvider>
 );
