@@ -1,309 +1,441 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode
-} from 'react';
 
-import {
-  User,
-  Ticket,
-  Technician,
-  TicketStatus,
-  WebhookStatus,
-  UrgentAlertType
-} from '../types';
-
-import { APP_CONFIG, APP_VERSION } from '../config';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
+import { User, Ticket, Feedback, Technician, TicketStatus, PaymentStatus, ReplacedPart, PartType, PartWarrantyStatus, UserRole, WebhookStatus, UrgentAlertType } from '../types';
+import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
-
-/* ================= CONTEXT TYPE ================= */
+import { APP_CONFIG, APP_VERSION } from '../config';
 
 interface AppContextType {
   user: User | null;
   tickets: Ticket[];
   technicians: Technician[];
-  webhookStatus: WebhookStatus;
+  feedback: Feedback[];
+  isSyncing: boolean;
   isAppLoading: boolean;
-
+  webhookStatus: WebhookStatus;
+  lastSyncTime: Date | null;
   login: (user: User) => void;
   logout: () => void;
-
-  addTicket: (data: any) => Promise<void>;
-  updateTicket: (ticket: Ticket) => Promise<void>;
+  addTicket: (ticket: Omit<Ticket, 'id' | 'status' | 'createdAt' | 'serviceBookingDate'>) => void;
+  updateTicket: (updatedTicket: Ticket) => void;
   reopenTicket: (ticketId: string, newTechId: string, notes: string) => void;
-
-  addTechnician: (tech: any) => Promise<boolean>;
-  deleteTechnician: (techId: string) => Promise<boolean>;
-
-  markAttendance: (status: 'Clock In' | 'Clock Out') => Promise<void>;
-  sendUrgentAlert: (type: UrgentAlertType, comments: string) => Promise<void>;
-  sendHeartbeat: () => Promise<void>;
+  uploadDamagedPart: (ticketId: string, imageData: string) => void;
+  addFeedback: (feedbackItem: Feedback) => void;
+  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => boolean;
+  updateTechnician: (updatedTech: Technician) => void;
+  deleteTechnician: (techId: string) => void;
+  resetTechniciansToDefaults: () => void;
+  sendReceipt: (ticketId: string) => void;
+  markAttendance: (status: 'Clock In' | 'Clock Out') => void;
+  sendUrgentAlert: (type: UrgentAlertType, comments: string) => void;
+  resetAllTechnicianPoints: () => void;
+  syncTickets: (isBackground?: boolean) => Promise<void>;
+  checkWebhookHealth: (urlOverride?: string) => Promise<void>;
+  sendCustomWebhookPayload: (action: string, payload: Record<string, any>, urlOverride?: string) => void;
+  refreshData: () => void;
+  sendHeartbeat: () => void;
 }
-
-/* ================= CONTEXT ================= */
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* ================= PROVIDER ================= */
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { addToast } = useToast();
-
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [webhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  
+  const pendingActions = useRef<{ added: Set<string>, deleted: Set<string>, updated: Set<string> }>({ 
+      added: new Set(), 
+      deleted: new Set(),
+      updated: new Set()
+  });
 
-  /* ================= AUTH ================= */
+  const { addToast } = useToast();
+  
+  const syncTickets = async (isBackground: boolean = false) => {
+    if (!user) return;
+    if (!isBackground) setIsSyncing(true);
+    
+    // FETCH_NEW_JOBS is the action that pulls everything (Tickets + Technicians) from the Google Sheet
+    const payload = { 
+        action: 'FETCH_NEW_JOBS', 
+        role: user.role, 
+        technicianId: user.id,
+        syncOrigin: 'Device_Cloud_Handshake'
+    };
+    
+    if (!isBackground) console.log('Initiating Cloud Sync:', payload.action);
 
-  const login = (u: User) => {
-    setUser(u);
-    localStorage.setItem('currentUser', JSON.stringify(u));
-  };
+    try {
+      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('currentUser');
-  };
+      if (response.ok) {
+        const data = await response.json();
+        
+        // 1. Update Tickets (Global Source of Truth)
+        if (data.tickets && Array.isArray(data.tickets)) {
+            const parsed = data.tickets.map((t: any) => ({
+                ...t,
+                createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
+                serviceBookingDate: t.serviceBookingDate ? new Date(t.serviceBookingDate) : undefined,
+                completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+            }));
+            setTickets(parsed);
+            localStorage.setItem('tickets', JSON.stringify(parsed));
+        }
 
-  /* ================= LOAD TECHNICIANS (STABLE) ================= */
+        // 2. Update Technicians (Global Source of Truth)
+        if (data.technicians && Array.isArray(data.technicians)) {
+             setTechnicians(prev => {
+                 let serverTechs = data.technicians;
+                 
+                 // Filter out items that are currently being deleted on THIS device
+                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
+                 
+                 const updated = serverTechs.map((st: any) => {
+                     const idStr = String(st.id);
+                     const existing = prev.find(p => String(p.id) === idStr);
+                     // Prioritize server points and name, but keep local "lastSeen" status for dots
+                     return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
+                 });
+                 
+                 localStorage.setItem('technicians', JSON.stringify(updated));
+                 return updated;
+             });
+        }
 
-  useEffect(() => {
-    const saved = localStorage.getItem('technicians');
-    if (saved) {
-      setTechnicians(JSON.parse(saved));
+        setLastSyncTime(new Date());
+        setWebhookStatus(WebhookStatus.Connected);
+        if (!isBackground) console.log('✅ Sync Success: Devices are now aligned.');
+      }
+    } catch (e) {
+        console.error('❌ Sync Failed:', e);
+        setWebhookStatus(WebhookStatus.Error);
+    } finally {
+      if (!isBackground) setIsSyncing(false);
     }
-    setIsAppLoading(false);
+  };
+
+  const sendHeartbeat = useCallback(() => {
+      if (!user || user.role !== UserRole.Technician) return;
+      const payload = {
+          action: 'HEARTBEAT',
+          technicianId: user.id,
+          technicianName: user.name,
+          version: APP_VERSION,
+          timestamp: new Date().toISOString()
+      };
+      
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+      }).then(r => {
+          if(r.ok) setWebhookStatus(WebhookStatus.Connected);
+          else setWebhookStatus(WebhookStatus.Error);
+      }).catch(() => setWebhookStatus(WebhookStatus.Error)); 
+  }, [user]);
+
+  const checkWebhookHealth = useCallback(async () => {
+    setWebhookStatus(WebhookStatus.Checking);
+    try {
+        const payload = { action: 'HEALTH_CHECK' };
+        const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) setWebhookStatus(WebhookStatus.Connected);
+        else setWebhookStatus(WebhookStatus.Error);
+    } catch {
+        setWebhookStatus(WebhookStatus.Error);
+    }
   }, []);
 
-  /* ================= SAVE TECHNICIANS ================= */
-
+  // INITIAL LOAD LOGIC
   useEffect(() => {
-    localStorage.setItem('technicians', JSON.stringify(technicians));
-  }, [technicians]);
+    const initApp = async () => {
+        try {
+            const savedUser = localStorage.getItem('currentUser');
+            let currentUser = null;
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                setUser(currentUser);
+            }
 
-  /* ================= TECHNICIANS ================= */
+            // Load local cache as placeholder
+            const savedTechs = localStorage.getItem('technicians');
+            if (savedTechs) {
+                setTechnicians(JSON.parse(savedTechs).map((t: any) => ({
+                    ...t, lastSeen: t.lastSeen ? new Date(t.lastSeen) : undefined
+                })));
+            } else {
+                setTechnicians(TECHNICIANS);
+            }
 
-  const addTechnician = async (tech: any): Promise<boolean> => {
-    try {
-      const newTech: Technician = {
-        id: `TECH-${Date.now()}`,
-        name: tech.name,
-        phone: tech.phone || '',
-        points: 0
+            const savedTickets = localStorage.getItem('tickets');
+            if (savedTickets) {
+                setTickets(JSON.parse(savedTickets, (key, value) => {
+                    if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
+                    return value;
+                }));
+            } else {
+                setTickets(INITIAL_TICKETS);
+            }
+
+            // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
+            if (currentUser) {
+                await syncTickets(false);
+            }
+        } catch (error) {
+            console.error('App init fail:', error);
+        } finally {
+            setIsAppLoading(false);
+            checkWebhookHealth();
+        }
+    };
+
+    initApp();
+  }, [checkWebhookHealth]);
+
+  // AUTO-SYNC ON VISIBILITY CHANGE (When user re-opens the browser tab)
+  useEffect(() => {
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible' && user) {
+              console.log('App resumed, syncing cloud data...');
+              syncTickets(true);
+          }
       };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
 
-      // UI update immediately
-      setTechnicians(prev => [...prev, newTech]);
+  const login = (u: User) => { 
+      setUser(u); 
+      localStorage.setItem('currentUser', JSON.stringify(u)); 
+      sendHeartbeat();
+      // Force sync immediately upon login to overwrite local stale data
+      syncTickets(false); 
+  };
 
-      addToast(
-        `Technician added. PIN: ${newTech.id.slice(-4)}`,
-        'success'
-      );
-
-      // Optional backend sync (won’t break UI if fails)
+  const logout = () => { 
+      setUser(null); 
+      localStorage.removeItem('currentUser'); 
+      // Optional: Clear cache on logout to ensure next user starts fresh
+      // localStorage.removeItem('tickets');
+      // localStorage.removeItem('technicians');
+  };
+  
+  const updateTechnician = (tech: Technician) => {
+      const idStr = String(tech.id);
+      pendingActions.current.updated.add(idStr);
+      setTimeout(() => pendingActions.current.updated.delete(idStr), 120000);
+      setTechnicians(prev => {
+          const updated = prev.map(t => String(t.id) === idStr ? tech : t);
+          localStorage.setItem('technicians', JSON.stringify(updated));
+          return updated;
+      });
+      const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
+      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'ADD_TECHNICIAN',
-          technician: newTech
-        })
-      }).catch(() => {});
-
-      return true;
-    } catch {
-      addToast('Failed to add technician', 'error');
-      return false;
-    }
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
+      addToast('Staff details updated successfully', 'success');
   };
 
-  const deleteTechnician = async (techId: string): Promise<boolean> => {
-    try {
-      setTechnicians(prev => prev.filter(t => t.id !== techId));
-      addToast('Technician removed', 'success');
-
+  const deleteTechnician = (id: string) => {
+      const idStr = String(id);
+      pendingActions.current.deleted.add(idStr);
+      setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000);
+      setTechnicians(prev => {
+          const updated = prev.filter(t => String(t.id) !== idStr);
+          localStorage.setItem('technicians', JSON.stringify(updated));
+          return updated;
+      });
+      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
+      console.log('Sending Webhook:', payload.action, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'DELETE_TECHNICIAN',
-          technicianId: techId
-        })
-      }).catch(() => {});
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      })
+      .then(res => {
+          if(!res.ok) throw new Error('Server returned ' + res.status);
+          addToast(`Technician removed from server.`, 'success');
+          syncTickets(true);
+      })
+      .catch(err => {
+          console.error("Failed to delete tech from server", err);
+          addToast("Network issue: Server deletion might have failed.", 'error');
+      });
+      if (user && String(user.id) === idStr) logout();
+  };
 
-      return true;
-    } catch {
-      addToast('Failed to delete technician', 'error');
-      return false;
+  const addTechnician = (tech: any): boolean => {
+    if (technicians.some(t => t.password === tech.password)) {
+        addToast(`Error: PIN ${tech.password} is already used.`, 'error');
+        return false;
     }
+    const newId = `tech${Date.now()}`; 
+    const newTech = { ...tech, id: newId, points: 0 };
+    pendingActions.current.added.add(newId);
+    setTimeout(() => pendingActions.current.added.delete(newId), 120000);
+    setTechnicians(prev => {
+        const updated = [...prev, newTech];
+        localStorage.setItem('technicians', JSON.stringify(updated));
+        return updated;
+    });
+    const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
+    console.log('Sending Webhook:', payload.action, payload);
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    }).then(() => {
+        addToast(`${tech.name} Saved to Server!`, 'success');
+        syncTickets(true);
+    }).catch(err => console.error("Failed to sync new tech to server", err));
+    return true;
   };
 
-  /* ================= TICKETS ================= */
-
-  const addTicket = async (data: any) => {
-    const ticketId = `PG-${Math.floor(1000 + Math.random() * 9000)}`;
-    const now = new Date().toISOString();
-
-    setTickets(prev => [
-      {
-        id: ticketId,
-        customerName: data.customerName,
-        phone: data.phone,
-        address: data.address,
-        serviceCategory: data.serviceCategory,
-        complaint: data.complaint,
-        technicianId: data.technicianId,
-        preferredTime: data.preferredTime,
-        status: TicketStatus.New,
-        createdAt: new Date(now),
-        serviceBookingDate: new Date(now)
-      },
-      ...prev
-    ]);
-
-    addToast('Ticket created', 'success');
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'NEW_TICKET',
-        'Ticket ID': ticketId,
-        'Created At': now,
-        'Service Booking Date': now,
-        'Preferred Time': data.preferredTime,
-        'Customer Name': data.customerName,
-        Phone: data.phone,
-        Address: data.address,
-        'Service Category': data.serviceCategory,
-        Complaint: data.complaint,
-        'Assigned Technician': data.technicianId,
-        Status: 'New Ticket'
-      })
-    }).catch(() => {});
+  const addTicket = (ticketData: any) => {
+      const newTicket: Ticket = {
+          ...ticketData,
+          id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
+          status: TicketStatus.New,
+          createdAt: new Date(),
+          serviceBookingDate: new Date(),
+      };
+      setTickets(prev => {
+          const updated = [newTicket, ...prev];
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
+      addToast('New service ticket generated!', 'success');
+      const payload = { action: 'NEW_TICKET', ticket: newTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
   };
 
-  const updateTicket = async (ticket: Ticket) => {
-    if (ticket.status !== TicketStatus.Completed) return;
-
-    setTickets(prev =>
-      prev.map(t => (t.id === ticket.id ? ticket : t))
-    );
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'JOB_COMPLETED',
-        'Ticket ID': ticket.id,
-        'Completed At': ticket.completedAt || new Date().toISOString(),
-        'Technician Name': ticket.technicianId
-      })
-    }).catch(() => {});
+  const updateTicket = (updatedTicket: Ticket) => {
+      setTickets(prev => {
+          const updated = prev.map(t => t.id === updatedTicket.id ? updatedTicket : t);
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
+      addToast('Job updated successfully.', 'success');
+      const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
+      const payload = { action: actionName, ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
   };
 
   const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
-    setTickets(prev =>
-      prev.map(t =>
-        t.id === ticketId
-          ? {
-              ...t,
-              status: TicketStatus.New,
-              technicianId: newTechId,
-              adminNotes: notes,
-              completedAt: undefined
-            }
-          : t
-      )
-    );
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+
+      const updatedTicket: Ticket = {
+          ...ticket,
+          status: TicketStatus.New,
+          technicianId: newTechId,
+          adminNotes: `RE-OPENED: ${notes}${ticket.adminNotes ? ' | ' + ticket.adminNotes : ''}`,
+          isEscalated: true,
+          completedAt: undefined,
+          workDone: undefined,
+          amountCollected: undefined
+      };
+
+      setTickets(prev => {
+          const updated = prev.map(t => t.id === ticketId ? updatedTicket : t);
+          localStorage.setItem('tickets', JSON.stringify(updated));
+          return updated;
+      });
+
+      addToast('Job re-opened and escalated!', 'success');
+      const payload = { action: 'REOPEN_TICKET', ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
   };
 
-  /* ================= FIELD ACTIONS ================= */
-
-  const markAttendance = async (status: 'Clock In' | 'Clock Out') => {
-    if (!user) return;
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'ATTENDANCE',
-        technicianId: user.id,
-        technicianName: user.name,
-        status,
-        timestamp: new Date().toISOString()
-      })
-    }).catch(() => {});
+  const markAttendance = (status: 'Clock In' | 'Clock Out') => {
+      if (!user) return;
+      const payload = { 
+          action: 'ATTENDANCE', 
+          technicianId: user.id,
+          technicianName: user.name,
+          status,
+          timestamp: new Date().toISOString()
+      };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(() => syncTickets(true));
   };
 
-  const sendUrgentAlert = async (type: UrgentAlertType, comments: string) => {
-    if (!user) return;
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'URGENT_ALERT',
-        technicianId: user.id,
-        technicianName: user.name,
-        alertType: type,
-        comments,
-        timestamp: new Date().toISOString()
-      })
-    }).catch(() => {});
+  const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
+      if (!user) return;
+      const payload = { 
+          action: 'URGENT_ALERT',
+          technicianId: user.id, 
+          technicianName: user.name,
+          alertType: type,
+          comments,
+          timestamp: new Date().toISOString()
+      };
+      console.log('Sending Webhook:', payload.action, payload);
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
   };
 
-  const sendHeartbeat = async () => {
-    if (!user) return;
+  const resetAllTechnicianPoints = () => {
+       setTechnicians(prev => prev.map(t => ({ ...t, points: 0 })));
+       addToast("Points reset locally. Please implement server-side logic.", 'success');
+  }
 
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'HEARTBEAT',
-        technicianId: user.id,
-        technicianName: user.name,
-        version: APP_VERSION,
-        timestamp: new Date().toISOString()
-      })
-    }).catch(() => {});
+  const sendReceipt = (ticketId: string) => {
+     console.log(`Sending receipt for ${ticketId}`);
   };
 
-  /* ================= PROVIDER ================= */
+  const refreshData = () => window.location.reload();
 
   return (
-    <AppContext.Provider
-      value={{
-        user,
-        tickets,
-        technicians,
-        webhookStatus,
-        isAppLoading,
-        login,
-        logout,
-        addTicket,
-        updateTicket,
-        reopenTicket,
-        addTechnician,
-        deleteTechnician,
-        markAttendance,
-        sendUrgentAlert,
-        sendHeartbeat
-      }}
-    >
+    <AppContext.Provider value={{ 
+        user, tickets, technicians, feedback, isSyncing, login, logout, addTicket, updateTicket, reopenTicket, uploadDamagedPart: () => {}, addFeedback: () => {}, addTechnician, updateTechnician, deleteTechnician, resetTechniciansToDefaults: () => {}, sendReceipt, markAttendance, sendUrgentAlert, resetAllTechnicianPoints, syncTickets, webhookStatus, checkWebhookHealth, sendCustomWebhookPayload: (action, payload) => {}, lastSyncTime, isAppLoading, refreshData, sendHeartbeat 
+    }}>
       {children}
     </AppContext.Provider>
   );
 };
 
-/* ================= HOOK ================= */
-
 export const useAppContext = () => {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useAppContext must be used inside AppProvider');
-  return ctx;
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useAppContext missing');
+  return context;
 };

@@ -1,7 +1,5 @@
 {
   "name": "Pandit Glen Service",
   "description": "A mobile-first app for 'Pandit Glen Service' to automate daily service job assignment, payment tracking, and customer feedback.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "requestFramePermissions": []
 }

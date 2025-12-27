@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Ticket } from '../types';
@@ -48,7 +47,6 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         setError('');
 
         try {
-            // Fix: Initializing GoogleGenAI right before the call to ensure use of up-to-date environment config
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
             const prompt = `You are an intelligent assistant for a service center. Your task is to parse the provided input (text or an image of a message/document) and extract information for a new service ticket.
@@ -88,9 +86,8 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                 });
             }
 
-            // Fix: Updated to recommended model 'gemini-3-flash-preview' for basic text tasks
             const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-2.5-flash',
                 contents: { parts },
                 config: {
                     systemInstruction: prompt,
@@ -99,8 +96,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                 },
             });
 
-            // Fix: Correctly extracting text using the .text property (not method)
-            const jsonString = response.text || '{}';
+            const jsonString = response.text;
             const parsedData = JSON.parse(jsonString);
             onParsed(parsedData);
 
