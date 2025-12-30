@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { APP_CONFIG, APP_VERSION } from '../config';
+import { APP_CONFIG, APP_VERSION } from '../../config';
 
 interface DiagnosticModalProps {
     onClose: () => void;
 }
 
 const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
-    const { webhookStatus } = useAppContext();
+    const { OookStatus } = useAppContext();
     const [logs, setLogs] = useState<{msg: string, type: 'info' | 'error' | 'success' | 'code'}[]>([]);
     const [isSimulating, setIsSimulating] = useState<string | null>(null);
 
@@ -26,9 +26,9 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
             else addLog('❌ ERROR: API_KEY missing. AI features will fail.', 'error');
 
             // Check 2: Production Network Reachability
-            addLog(`Pinging Hostinger Server: ${APP_CONFIG.MASTER_WEBHOOK_URL.substring(0, 30)}...`, 'info');
+            addLog(`Pinging Hostinger Server: ${APP_CONFIG.WEBHOOK_URL.substring(0, 30)}...`, 'info');
             try {
-                const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, { 
+                const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
                     method: 'POST', 
                     body: JSON.stringify({action: 'HEALTH_CHECK'}),
                     headers: {'Content-Type': 'application/json'}
@@ -53,7 +53,7 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
         addLog(JSON.stringify(fullPayload, null, 2), 'code');
         
         try {
-            const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+            const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(fullPayload)

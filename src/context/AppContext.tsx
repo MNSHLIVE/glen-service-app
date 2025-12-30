@@ -62,7 +62,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const checkWebhookHealth = useCallback(async () => {
     try {
       setWebhookStatus(WebhookStatus.Checking);
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'HEALTH_CHECK' })
@@ -83,7 +83,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 
     setIsSyncing(true);
     try {
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +166,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         'Status': newTicket.status || TicketStatus.New
       };
 
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -196,7 +196,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
 
     try {
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +243,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTechnicians(prev => [...prev, newTechnician]);
 
     try {
-      await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -262,7 +262,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTechnicians(prev => prev.filter(t => t.id !== technicianId));
 
     try {
-      await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -296,7 +296,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const markAttendance = useCallback(async (action: string) => {
     // Send attendance to server
     try {
-      await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
