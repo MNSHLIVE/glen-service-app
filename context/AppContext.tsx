@@ -71,7 +71,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!isBackground) console.log('Initiating Cloud Sync:', payload.action);
 
     try {
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -134,7 +134,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -148,7 +148,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setWebhookStatus(WebhookStatus.Checking);
     try {
         const payload = { action: 'HEALTH_CHECK' };
-        const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -245,7 +245,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
@@ -264,7 +264,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
@@ -297,7 +297,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
     console.log('Sending Webhook:', payload.action, payload);
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+    fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
@@ -324,7 +324,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addToast('New service ticket generated!', 'success');
       const payload = { action: 'NEW_TICKET', ticket: newTicket };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
@@ -341,7 +341,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
       const payload = { action: actionName, ticket: updatedTicket };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
@@ -372,7 +372,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addToast('Job re-opened and escalated!', 'success');
       const payload = { action: 'REOPEN_TICKET', ticket: updatedTicket };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
@@ -389,7 +389,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -407,7 +407,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString()
       };
       console.log('Sending Webhook:', payload.action, payload);
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
