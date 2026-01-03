@@ -178,23 +178,38 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         updated_at: newTicket.createdAt?.toISOString()
       };
 
+      console.log('🚀 SENDING WEBHOOK - NEW_TICKET:', {
+        url: APP_CONFIG.WEBHOOK_URL,
+        payload: payload
+      });
+
       const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      console.log('📡 WEBHOOK RESPONSE:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: response.url
+      });
+
       if (response.ok) {
+        console.log('✅ WEBHOOK SUCCESS - Ticket created:', newTicket.id);
         // Fetch latest data after successful ticket creation
         await fetchLatestData();
         // WhatsApp: Send assignment notification to customer
         console.log(`📱 WhatsApp to ${newTicket.phone}: "Dear Customer, Your service request with Pandit Glen Service has been scheduled. Our certified technician will visit you at the requested time. Thank you for choosing us!"`);
       } else {
+        console.error('❌ WEBHOOK FAILED - Status:', response.status, response.statusText);
         // Revert on failure
         setTickets(prev => prev.filter(t => t.id !== newTicket.id));
-        throw new Error('Failed to create ticket');
+        throw new Error(`Failed to create ticket: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
+      console.error('💥 WEBHOOK ERROR:', error);
       // Revert on error
       setTickets(prev => prev.filter(t => t.id !== newTicket.id));
       throw error;
@@ -419,6 +434,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     tickets,
     isSyncing,
     webhookStatus,
+    checkWebhookHealth,
     fetchLatestData,
     addTicket,
     updateTicket,
