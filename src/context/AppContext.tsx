@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { User, Technician, Ticket, TicketStatus, WebhookStatus } from "../types";
-import { TECHNICIANS, INITIAL_TICKETS } from "../constants";
+import { TECHNICIANS, INITIAL_TICKETS, APP_VERSION } from "../constants";
 import { APP_CONFIG } from "../../config";
 
 interface AppContextType {
@@ -65,7 +65,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'HEALTH_CHECK' })
+        body: JSON.stringify({ function: 'HEALTH_CHECK' })
       });
 
       if (response.ok) {
@@ -87,9 +87,17 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'FETCH_LATEST_DATA',
-          role: user?.role || 'Admin',
-          technicianId: user?.id || 'admin01'
+          function: 'SYNC_ALL_DATA',
+          technician_id: user?.id || 'admin01',
+          technician_name: user?.name || 'Admin',
+          app_version: APP_VERSION,
+          last_seen: new Date().toISOString(),
+          tickets_cached: tickets.map(t => ({
+            ticket_id: t.id,
+            status: t.status.toLowerCase(),
+            updated_at: t.createdAt?.toISOString()
+          })),
+          attendance_cached: [] // Will be populated when attendance tracking is implemented
         })
       });
 
@@ -152,18 +160,22 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       // Build payload matching Complaint Sheet headers exactly
       const payload = {
-        action: 'NEW_TICKET',
-        'Ticket ID': newTicket.id,
-        'Created At': newTicket.createdAt?.toISOString(),
-        'Service Booking Date': newTicket.serviceBookingDate?.toISOString(),
-        'Preferred Time': newTicket.preferredTime || '',
-        'Customer Name': newTicket.customerName || '',
-        'Phone': newTicket.phone || '',
-        'Address': newTicket.address || '',
-        'Service Category': newTicket.serviceCategory || '',
-        'Complaint': newTicket.complaint || '',
-        'Assigned Technician': newTicket.technicianId || '',
-        'Status': newTicket.status || TicketStatus.New
+        function: 'NEW_TICKET',
+        ticket_id: newTicket.id,
+        created_at: newTicket.createdAt?.toISOString(),
+        service_booking_date: newTicket.serviceBookingDate?.toISOString(),
+        preferred_time: newTicket.preferredTime || '',
+        customer_name: newTicket.customerName || '',
+        phone: newTicket.phone || '',
+        address: newTicket.address || '',
+        service_category: newTicket.serviceCategory || '',
+        complaint: newTicket.complaint || '',
+        assigned_technician: newTicket.technicianId || null,
+        status: 'open',
+        reopen_count: 0,
+        revised_at: null,
+        revised_reason: null,
+        updated_at: newTicket.createdAt?.toISOString()
       };
 
       const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
@@ -196,43 +208,91 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
 
     try {
-      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET',
-          ticket: updatedTicket
-        })
-      });
+      if (wasCompleted) {
+        // Send JOB_COMPLETED payload for completed tickets
+        const technician = technicians.find(t => t.id === updatedTicket.technicianId);
+        const payload = {
+          function: 'JOB_COMPLETED',
+          ticket_id: updatedTicket.id,
+          completed_at: new Date().toISOString(),
+          technician_name: technician?.name || updatedTicket.technicianId || '',
+          work_done_summary: '', // Will be populated when UI supports it
+          amount_collected: 0, // Will be populated when UI supports it
+          payment_status: 'unpaid', // Default status
+          points_awarded: 0, // Default for now
+          parts_replaced: '', // Will be populated when UI supports it
+          amc_discussion: '', // Will be populated when UI supports it
+          free_service: false // Default for now
+        };
 
-      if (response.ok && wasCompleted) {
-        // Fetch latest data after successful job completion
-        await fetchLatestData();
-        // WhatsApp: Send completion thank you message
-        console.log(`📱 WhatsApp to ${updatedTicket.phone}: "Thank you for choosing Pandit Glen Service. We hope our service met your expectations. Please don't hesitate to contact us for any future needs."`);
-      } else if (!response.ok) {
-        // Revert on failure - would need to refetch or store previous state
-        console.warn('Failed to update ticket on server');
+        const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          // Fetch latest data after successful job completion
+          await fetchLatestData();
+          // WhatsApp: Send completion thank you message
+          console.log(`📱 WhatsApp to ${updatedTicket.phone}: "Thank you for choosing Pandit Glen Service. We hope our service met your expectations. Please don't hesitate to contact us for any future needs."`);
+        } else {
+          console.warn('Failed to update ticket on server');
+        }
+      } else {
+        // For non-completed updates, could add logic here if needed
+        console.log('Ticket updated (not completed):', updatedTicket.id);
       }
     } catch (error) {
       console.warn('Error updating ticket:', error);
     }
-  }, []);
+  }, [technicians, fetchLatestData]);
 
   const reopenTicket = useCallback(async (ticketId: string, technicianId: string, notes: string) => {
     const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket) return;
 
-    const escalatedTicket = {
+    // Optimistic update - mark as reopened
+    const reopenedTicket = {
       ...ticket,
       technicianId,
       status: TicketStatus.New,
       adminNotes: notes,
       isEscalated: true
     };
+    setTickets(prev => prev.map(t => t.id === ticketId ? reopenedTicket : t));
 
-    await updateTicket(escalatedTicket);
-  }, [tickets, updateTicket]);
+    try {
+      const payload = {
+        function: 'REVIVE_TICKET',
+        ticket_id: ticketId,
+        status: 'reopened',
+        reopen_count: 1, // Default increment, could be calculated from history
+        revised_at: new Date().toISOString(),
+        revised_reason: notes || 'Reopened by admin',
+        updated_at: new Date().toISOString()
+      };
+
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        // Fetch latest data after successful reopen
+        await fetchLatestData();
+      } else {
+        // Revert on failure
+        setTickets(prev => prev.map(t => t.id === ticketId ? ticket : t));
+        console.warn('Failed to reopen ticket on server');
+      }
+    } catch (error) {
+      // Revert on error
+      setTickets(prev => prev.map(t => t.id === ticketId ? ticket : t));
+      console.warn('Error reopening ticket:', error);
+    }
+  }, [tickets, fetchLatestData]);
 
   const addTechnician = useCallback(async (technicianData: Omit<Technician, 'id'>) => {
     const newTechnician = {
@@ -243,16 +303,31 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTechnicians(prev => [...prev, newTechnician]);
 
     try {
-      await fetch(APP_CONFIG.WEBHOOK_URL, {
+      const payload = {
+        function: 'ADD_TECHNICIAN',
+        technician_id: newTechnician.id,
+        technician_name: newTechnician.name,
+        pin: newTechnician.password,
+        points: newTechnician.points || 0,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+        app_version: APP_VERSION,
+        last_seen: new Date().toISOString()
+      };
+
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'ADD_TECHNICIAN',
-          technician: newTechnician
-        })
+        body: JSON.stringify(payload)
       });
-      // Fetch latest data after adding to ensure all clients get updated data
-      await fetchLatestData();
+
+      if (response.ok) {
+        // Fetch latest data after adding to ensure all clients get updated data
+        await fetchLatestData();
+      } else {
+        console.warn('Failed to add technician on server');
+      }
     } catch (error) {
       console.warn('Failed to add technician on server');
     }
@@ -262,16 +337,27 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setTechnicians(prev => prev.filter(t => t.id !== technicianId));
 
     try {
-      await fetch(APP_CONFIG.WEBHOOK_URL, {
+      const payload = {
+        function: 'DELETE_TECHNICIAN',
+        technician_id: technicianId,
+        status: 'inactive',
+        deleted_at: new Date().toISOString(),
+        app_version: APP_VERSION,
+        last_seen: new Date().toISOString()
+      };
+
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'DELETE_TECHNICIAN',
-          technicianId
-        })
+        body: JSON.stringify(payload)
       });
-      // Fetch latest data after deleting to ensure all clients get updated data
-      await fetchLatestData();
+
+      if (response.ok) {
+        // Fetch latest data after deleting to ensure all clients get updated data
+        await fetchLatestData();
+      } else {
+        console.warn('Failed to delete technician on server');
+      }
     } catch (error) {
       console.warn('Failed to delete technician on server');
     }
@@ -296,17 +382,26 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const markAttendance = useCallback(async (action: string) => {
     // Send attendance to server
     try {
-      await fetch(APP_CONFIG.WEBHOOK_URL, {
+      const payload = {
+        function: 'ATTENDANCE',
+        technician_id: user?.id || '',
+        technician_name: user?.name || '',
+        check_in: action === 'Clock In' ? new Date().toISOString() : null,
+        check_out: action === 'Clock Out' ? new Date().toISOString() : null,
+        working_hours: 0 // Will be calculated later in n8n
+      };
+
+      const response = await fetch(APP_CONFIG.WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'ATTENDANCE',
-          technicianId: user?.id,
-          technicianName: user?.name,
-          status: action,
-          timestamp: new Date().toISOString()
-        })
+        body: JSON.stringify(payload)
       });
+
+      if (response.ok) {
+        console.log('Attendance marked successfully:', action);
+      } else {
+        console.warn('Failed to mark attendance on server');
+      }
     } catch (error) {
       console.warn('Failed to mark attendance:', error);
     }
