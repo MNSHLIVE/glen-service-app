@@ -16,6 +16,7 @@ interface AppContextType {
 
   // Webhook status
   webhookStatus: WebhookStatus;
+  checkWebhookHealth: () => Promise<void>;
 
   // Sync functions
   fetchLatestData: () => Promise<void>;
