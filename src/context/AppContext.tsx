@@ -16,7 +16,6 @@ interface AppContextType {
 
   // Webhook status
   webhookStatus: WebhookStatus;
-  checkWebhookHealth: () => Promise<void>;
 
   // Sync functions
   fetchLatestData: () => Promise<void>;
@@ -419,7 +418,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     tickets,
     isSyncing,
     webhookStatus,
-    checkWebhookHealth,
     fetchLatestData,
     addTicket,
     updateTicket,

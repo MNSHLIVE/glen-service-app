@@ -39,10 +39,10 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
   }, [tickets]);
 
   const StatusBadge = () => {
-    const color = webhookStatus === WebhookStatus.Connected ? 'bg-green-100 text-green-700' : 
+    const color = webhookStatus === WebhookStatus.Connected ? 'bg-green-100 text-green-700' :
                   webhookStatus === WebhookStatus.Checking ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
     return (
-        <button onClick={() => checkWebhookHealth()} className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 border border-white/20 ${color}`}>
+        <button onClick={() => syncTickets(false)} className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 border border-white/20 ${color}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${webhookStatus === WebhookStatus.Connected ? 'bg-green-500 shadow-[0_0_5px_green]' : 'bg-red-500'}`}></span>
             <span>n8n {webhookStatus}</span>
         </button>
