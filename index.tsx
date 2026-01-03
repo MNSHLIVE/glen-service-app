@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import { AppProvider } from './context/AppContext';
-import { ToastProvider } from './context/ToastContext';
+import App from './src/App';
+import { AppProvider } from './src/context/AppContext';
+import { ToastProvider } from './src/context/ToastContext';
 
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
