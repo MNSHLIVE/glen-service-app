@@ -60,15 +60,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
     
-    // FETCH_NEW_JOBS is the action that pulls everything (Tickets + Technicians) from the Google Sheet
-    const payload = { 
-        action: 'FETCH_NEW_JOBS', 
-        role: user.role, 
+    // FETCH_NEW_JOBS is the function that pulls everything (Tickets + Technicians) from the Google Sheet
+    const payload = {
+        function: 'FETCH_NEW_JOBS',
+        role: user.role,
         technicianId: user.id,
         syncOrigin: 'Device_Cloud_Handshake'
     };
     
-    if (!isBackground) console.log('Initiating Cloud Sync:', payload.action);
+    if (!isBackground) console.log('Initiating Cloud Sync:', payload.function);
 
     try {
       const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -127,7 +127,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const sendHeartbeat = useCallback(() => {
       if (!user || user.role !== UserRole.Technician) return;
       const payload = {
-          action: 'HEARTBEAT',
+          function: 'HEARTBEAT',
           technicianId: user.id,
           technicianName: user.name,
           version: APP_VERSION,
@@ -147,7 +147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const checkWebhookHealth = useCallback(async () => {
     setWebhookStatus(WebhookStatus.Checking);
     try {
-        const payload = { action: 'HEALTH_CHECK' };
+        const payload = { function: 'HEALTH_CHECK' };
         const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -243,8 +243,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
-      const payload = { action: 'UPDATE_TECHNICIAN', technician: tech };
-      console.log('Sending Webhook:', payload.action, payload);
+      const payload = { function: 'UPDATE_TECHNICIAN', technician: tech };
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -262,8 +262,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           localStorage.setItem('technicians', JSON.stringify(updated));
           return updated;
       });
-      const payload = { action: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
-      console.log('Sending Webhook:', payload.action, payload);
+      const payload = { function: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -295,8 +295,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         localStorage.setItem('technicians', JSON.stringify(updated));
         return updated;
     });
-    const payload = { action: 'ADD_TECHNICIAN', technician: newTech };
-    console.log('Sending Webhook:', payload.action, payload);
+    const payload = { function: 'ADD_TECHNICIAN', technician: newTech };
+    console.log('Sending Webhook:', payload.function, payload);
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -322,8 +322,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return updated;
       });
       addToast('New service ticket generated!', 'success');
-      const payload = { action: 'NEW_TICKET', ticket: newTicket };
-      console.log('Sending Webhook:', payload.action, payload);
+      const payload = { function: 'NEW_TICKET', ticket: newTicket };
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -338,9 +338,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return updated;
       });
       addToast('Job updated successfully.', 'success');
-      const actionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
-      const payload = { action: actionName, ticket: updatedTicket };
-      console.log('Sending Webhook:', payload.action, payload);
+      const functionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
+      const payload = { function: functionName, ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -370,8 +370,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       addToast('Job re-opened and escalated!', 'success');
-      const payload = { action: 'REOPEN_TICKET', ticket: updatedTicket };
-      console.log('Sending Webhook:', payload.action, payload);
+      const payload = { function: 'REOPEN_TICKET', ticket: updatedTicket };
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -381,14 +381,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
       if (!user) return;
-      const payload = { 
-          action: 'ATTENDANCE', 
+      const payload = {
+          function: 'ATTENDANCE',
           technicianId: user.id,
           technicianName: user.name,
           status,
           timestamp: new Date().toISOString()
       };
-      console.log('Sending Webhook:', payload.action, payload);
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -398,15 +398,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {
       if (!user) return;
-      const payload = { 
-          action: 'URGENT_ALERT',
-          technicianId: user.id, 
+      const payload = {
+          function: 'URGENT_ALERT',
+          technicianId: user.id,
           technicianName: user.name,
           alertType: type,
           comments,
           timestamp: new Date().toISOString()
       };
-      console.log('Sending Webhook:', payload.action, payload);
+      console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
