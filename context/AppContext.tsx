@@ -80,15 +80,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
-        // 1. Update Tickets (Global Source of Truth) - Server response is single source of truth
-        if (data.tickets && Array.isArray(data.tickets)) {
-            const parsed = data.tickets.map((t: any) => ({
-                ...t,
-                createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
-                serviceBookingDate: t.serviceBookingDate ? new Date(t.serviceBookingDate) : undefined,
-                completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
-            }));
-            setTickets(parsed);
+        // Map FETCH_NEW_JOBS tickets response to app state
+        if (data && Array.isArray(data.tickets)) {
+          setTickets(data.tickets);
         }
 
         // 2. Update Technicians (Global Source of Truth)
