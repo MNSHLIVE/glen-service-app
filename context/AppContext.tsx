@@ -80,7 +80,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
-        // 1. Update Tickets (Global Source of Truth)
+        // 1. Update Tickets (Global Source of Truth) - Server response is single source of truth
         if (data.tickets && Array.isArray(data.tickets)) {
             const parsed = data.tickets.map((t: any) => ({
                 ...t,
@@ -89,7 +89,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
             }));
             setTickets(parsed);
-            localStorage.setItem('tickets', JSON.stringify(parsed));
         }
 
         // 2. Update Technicians (Global Source of Truth)
@@ -107,7 +106,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                      return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
                  });
                  
-                 localStorage.setItem('technicians', JSON.stringify(updated));
                  return updated;
              });
         }
@@ -171,7 +169,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setUser(currentUser);
             }
 
-            // Load local cache as placeholder
+            // Load local cache as placeholder until server responds
             const savedTechs = localStorage.getItem('technicians');
             if (savedTechs) {
                 setTechnicians(JSON.parse(savedTechs).map((t: any) => ({
@@ -181,24 +179,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setTechnicians(TECHNICIANS);
             }
 
-            const savedTickets = localStorage.getItem('tickets');
-            if (savedTickets) {
-                setTickets(JSON.parse(savedTickets, (key, value) => {
-                    if (['createdAt', 'serviceBookingDate', 'completedAt', 'purchaseDate'].includes(key)) return value ? new Date(value) : undefined;
-                    return value;
-                }));
-            } else {
-                setTickets(INITIAL_TICKETS);
-            }
-
             // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
             if (currentUser) {
                 await syncTickets(false);
+            } else {
+                setIsAppLoading(false);
             }
         } catch (error) {
             console.error('App init fail:', error);
-        } finally {
             setIsAppLoading(false);
+        } finally {
             checkWebhookHealth();
         }
     };
@@ -229,20 +219,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { 
       setUser(null); 
       localStorage.removeItem('currentUser'); 
-      // Optional: Clear cache on logout to ensure next user starts fresh
-      // localStorage.removeItem('tickets');
-      // localStorage.removeItem('technicians');
   };
   
   const updateTechnician = (tech: Technician) => {
       const idStr = String(tech.id);
       pendingActions.current.updated.add(idStr);
       setTimeout(() => pendingActions.current.updated.delete(idStr), 120000);
-      setTechnicians(prev => {
-          const updated = prev.map(t => String(t.id) === idStr ? tech : t);
-          localStorage.setItem('technicians', JSON.stringify(updated));
-          return updated;
-      });
       const payload = { function: 'UPDATE_TECHNICIAN', technician: tech };
       console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -257,11 +239,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const idStr = String(id);
       pendingActions.current.deleted.add(idStr);
       setTimeout(() => pendingActions.current.deleted.delete(idStr), 120000);
-      setTechnicians(prev => {
-          const updated = prev.filter(t => String(t.id) !== idStr);
-          localStorage.setItem('technicians', JSON.stringify(updated));
-          return updated;
-      });
       const payload = { function: 'DELETE_TECHNICIAN', technicianId: idStr, id: idStr };
       console.log('Sending Webhook:', payload.function, payload);
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -290,11 +267,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newTech = { ...tech, id: newId, points: 0 };
     pendingActions.current.added.add(newId);
     setTimeout(() => pendingActions.current.added.delete(newId), 120000);
-    setTechnicians(prev => {
-        const updated = [...prev, newTech];
-        localStorage.setItem('technicians', JSON.stringify(updated));
-        return updated;
-    });
     const payload = { function: 'ADD_TECHNICIAN', technician: newTech };
     console.log('Sending Webhook:', payload.function, payload);
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -316,11 +288,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           createdAt: new Date(),
           serviceBookingDate: new Date(),
       };
-      setTickets(prev => {
-          const updated = [newTicket, ...prev];
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
       addToast('New service ticket generated!', 'success');
       const payload = { function: 'NEW_TICKET', ticket: newTicket };
       console.log('Sending Webhook:', payload.function, payload);
@@ -332,11 +299,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
-      setTickets(prev => {
-          const updated = prev.map(t => t.id === updatedTicket.id ? updatedTicket : t);
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
       addToast('Job updated successfully.', 'success');
       const functionName = updatedTicket.status === TicketStatus.Completed ? 'JOB_COMPLETED' : 'UPDATE_TICKET';
       const payload = { function: functionName, ticket: updatedTicket };
@@ -362,12 +324,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           workDone: undefined,
           amountCollected: undefined
       };
-
-      setTickets(prev => {
-          const updated = prev.map(t => t.id === ticketId ? updatedTicket : t);
-          localStorage.setItem('tickets', JSON.stringify(updated));
-          return updated;
-      });
 
       addToast('Job re-opened and escalated!', 'success');
       const payload = { function: 'REOPEN_TICKET', ticket: updatedTicket };
@@ -415,8 +371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const resetAllTechnicianPoints = () => {
-       setTechnicians(prev => prev.map(t => ({ ...t, points: 0 })));
-       addToast("Points reset locally. Please implement server-side logic.", 'success');
+       addToast("Please implement server-side logic to reset points.", 'success');
   }
 
   const sendReceipt = (ticketId: string) => {
