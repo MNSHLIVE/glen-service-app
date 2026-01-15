@@ -5,6 +5,24 @@ import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
 import { APP_CONFIG, APP_VERSION } from '../config';
 
+// Ticket visibility window (frontend only)
+const ADMIN_DATA_DAYS = 5;
+const TECHNICIAN_DATA_DAYS = 2;
+
+// Helper function to filter tickets by number of days
+const filterTicketsByDays = (tickets: Ticket[], days: number): Ticket[] => {
+  const now = new Date();
+  
+  return tickets.filter(ticket => {
+    if (!ticket.createdAt) return true;
+    
+    const ticketDate = new Date(ticket.createdAt);
+    const diffInDays = (now.getTime() - ticketDate.getTime()) / (1000 * 60 * 60 * 24);
+    
+    return diffInDays <= days;
+  });
+};
+
 interface AppContextType {
   user: User | null;
   tickets: Ticket[];
@@ -80,9 +98,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         
-        // Map FETCH_NEW_JOBS tickets response to app state
+        // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
         if (data && Array.isArray(data.tickets)) {
-          setTickets(data.tickets);
+          // Apply role-based day filtering (frontend only)
+          let filteredTickets = data.tickets;
+          
+          if (user?.role === 'Admin') {
+            filteredTickets = filterTicketsByDays(data.tickets, ADMIN_DATA_DAYS);
+          } else if (user?.role === 'Technician') {
+            filteredTickets = filterTicketsByDays(data.tickets, TECHNICIAN_DATA_DAYS);
+          }
+          
+          setTickets(filteredTickets);
         }
 
         // 2. Update Technicians (Global Source of Truth)
@@ -225,8 +252,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
-      addToast('Staff details updated successfully', 'success');
+      }).then(res => {
+          if (res.ok) {
+              syncTickets(true);
+              addToast('Staff details updated successfully', 'success');
+          } else {
+              addToast('Failed to update staff details.', 'error');
+          }
+      }).catch(err => {
+          console.error('UPDATE_TECHNICIAN error:', err);
+          addToast('Network error. Staff details may not have been updated.', 'error');
+      });
   };
 
   const deleteTechnician = (id: string) => {
@@ -267,10 +303,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
-    }).then(() => {
-        addToast(`${tech.name} Saved to Server!`, 'success');
-        syncTickets(true);
-    }).catch(err => console.error("Failed to sync new tech to server", err));
+    }).then(res => {
+        if (res.ok) {
+            addToast(`${tech.name} Saved to Server!`, 'success');
+            syncTickets(true);
+        } else {
+            addToast('Failed to add technician. Please try again.', 'error');
+        }
+    }).catch(err => {
+        console.error('ADD_TECHNICIAN error:', err);
+        addToast('Network error. Technician may not have been saved.', 'error');
+    });
     return true;
   };
 
@@ -289,7 +332,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(res => {
+          if (res.ok) {
+              console.log('NEW_TICKET sent successfully, fetching fresh data...');
+              syncTickets(true);
+          } else {
+              addToast('Failed to save ticket. Please try again.', 'error');
+          }
+      }).catch(err => {
+          console.error('NEW_TICKET error:', err);
+          addToast('Network error. Ticket may not have been saved.', 'error');
+      });
   };
 
   const updateTicket = (updatedTicket: Ticket) => {
@@ -301,7 +354,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(res => {
+          if (res.ok) {
+              syncTickets(true);
+          } else {
+              addToast('Failed to update job. Please try again.', 'error');
+          }
+      }).catch(err => {
+          console.error('UPDATE_TICKET error:', err);
+          addToast('Network error. Job may not have been updated.', 'error');
+      });
   };
 
   const reopenTicket = (ticketId: string, newTechId: string, notes: string) => {
@@ -326,7 +388,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(res => {
+          if (res.ok) {
+              syncTickets(true);
+          } else {
+              addToast('Failed to re-open job. Please try again.', 'error');
+          }
+      }).catch(err => {
+          console.error('REOPEN_TICKET error:', err);
+          addToast('Network error. Job may not have been re-opened.', 'error');
+      });
   };
 
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
@@ -343,7 +414,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).then(() => syncTickets(true));
+      }).then(res => {
+          if (res.ok) {
+              syncTickets(true);
+          } else {
+              addToast('Failed to record attendance. Please try again.', 'error');
+          }
+      }).catch(err => {
+          console.error('ATTENDANCE error:', err);
+          addToast('Network error. Attendance may not have been recorded.', 'error');
+      });
   };
 
   const sendUrgentAlert = (type: UrgentAlertType, comments: string) => {

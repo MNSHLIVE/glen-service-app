@@ -31,15 +31,9 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
       }
   }, [user?.id]);
 
-  // AUTO-SYNC
-  useEffect(() => {
-      syncTickets(true);
-      const intervalId = setInterval(() => {
-          syncTickets(true);
-      }, 60000);
-      return () => clearInterval(intervalId);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // AUTO-SYNC - Removed redundant immediate sync and interval
+  // Visibility change in AppContext.tsx handles background sync when tab becomes visible
+  // Manual refresh button triggers explicit sync
 
   const handleAttendanceToggle = () => {
       const newStatus = !isOnDuty;
