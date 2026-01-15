@@ -4,7 +4,9 @@ import App from './App';
 import { AppProvider } from './context/AppContext';
 import { ToastProvider } from './context/ToastContext';
 
+// Disabled temporarily – service-worker.js not deployed on Vercel
 // Register Service Worker for PWA functionality
+/*
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
@@ -16,6 +18,7 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
+*/
 
 
 const rootElement = document.getElementById('root');

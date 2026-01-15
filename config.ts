@@ -7,8 +7,8 @@
 export const APP_VERSION = '4.6.3';
 
 export const APP_CONFIG = {
-    // 1. The Webhook URL from your n8n "Webhook" node
-    MASTER_WEBHOOK_URL: "https://n8n.srv1143492.hstgr.cloud/webhook/Pandit-glen-service", 
+    // 1. The Webhook URL from your n8n "Webhook" node (via Vercel proxy)
+    MASTER_WEBHOOK_URL: "/api/n8n-proxy",
 
     // 2. The URL of your Master Google Sheet
     GOOGLE_SHEET_URL: "https://docs.google.com/spreadsheets/d/1q2aghHvmjxuE8sSRIz8ikkmsFz1hg3VS2_Aqgx-RlEE/edit?gid=0#gid=0",

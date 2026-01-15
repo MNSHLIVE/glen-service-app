@@ -21,13 +21,8 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
       return technicians.filter(t => t.lastSeen && (Date.now() - new Date(t.lastSeen).getTime() < fiveMins)).length;
   }, [technicians]);
 
-  useEffect(() => {
-    if (user?.role !== 'Technician') return;
-
-    syncTickets(true);
-    const interval = setInterval(() => syncTickets(true), 60000);
-    return () => clearInterval(interval);
-}, [syncTickets, user]);
+  // AUTO-SYNC REMOVED - Visibility change in AppContext.tsx handles background sync
+  // Manual refresh button triggers explicit sync
 
 
   const counts = useMemo(() => {
