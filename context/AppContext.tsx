@@ -63,6 +63,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(WebhookStatus.Unknown);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   
@@ -202,20 +203,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
             if (currentUser) {
-                await syncTickets(false);
-            } else {
-                setIsAppLoading(false);
+                await syncTickets(true);
             }
         } catch (error) {
             console.error('App init fail:', error);
-            setIsAppLoading(false);
         } finally {
+            setIsAppLoading(false);
             checkWebhookHealth();
         }
     };
 
     initApp();
   }, [checkWebhookHealth]);
+
+  // SYNC AFTER LOGIN
+  useEffect(() => {
+    if (!user) return;
+
+    const init = async () => {
+        await syncTickets(true);
+    };
+
+    init();
+  }, [user]);
 
   // AUTO-SYNC ON VISIBILITY CHANGE (When user re-opens the browser tab)
   useEffect(() => {
