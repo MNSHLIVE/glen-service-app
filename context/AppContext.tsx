@@ -306,7 +306,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }).then(res => {
         if (res.ok) {
             addToast(`${tech.name} Saved to Server!`, 'success');
-            syncTickets(true);
+            syncTickets(false);
         } else {
             addToast('Failed to add technician. Please try again.', 'error');
         }
@@ -335,7 +335,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }).then(res => {
           if (res.ok) {
               console.log('NEW_TICKET sent successfully, fetching fresh data...');
-              syncTickets(true);
+              syncTickets(false);
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
           }
