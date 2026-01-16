@@ -214,6 +214,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             checkWebhookHealth();
         }
     };
+        // Maximum timeout to ensure app doesn't hang indefinitely (10 seconds max)
+    const maxTimeoutId = setTimeout(() => setIsAppLoading(false), 10000);
+    return () => clearTimeout(maxTimeoutId);
+                  
 
     initApp();
   }, [checkWebhookHealth]);
