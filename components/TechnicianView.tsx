@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { Ticket, TicketStatus } from '../types';
 import JobCard from './JobCard';
 import TechnicianSupportModal from './TechnicianSupportModal';
+import { triggerDataSync } from '../utils/dataSync';
 
 interface TechnicianViewProps {
     onViewTicket: (ticketId: string) => void;
@@ -59,7 +60,16 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-           <button onClick={() => syncTickets(false)} disabled={isSyncing} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50" title="Fetch New Jobs">
+           <button 
+                onClick={() => {
+                    syncTickets(false);
+                    // Notify all other tabs to refresh
+                    triggerDataSync('general_refresh');
+                }} 
+                disabled={isSyncing} 
+                className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50" 
+                title="Fetch New Jobs"
+            >
                 {isSyncing ? <SpinnerIcon /> : <RefreshIcon />}
             </button>
             <button onClick={logout} className="text-sm bg-glen-red text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
