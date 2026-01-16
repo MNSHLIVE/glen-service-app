@@ -139,6 +139,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('❌ Sync Failed:', e);
         setWebhookStatus(WebhookStatus.Error);
     } finally {
+          setTimeout(() => setIsAppLoading(false), 5000);
       if (!isBackground) setIsSyncing(false);
     }
   };
