@@ -112,6 +112,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           setTickets(filteredTickets);
+          if (!data.tickets || data.tickets.length === 0) {
+            console.warn('⚠️ WARNING: Empty tickets response from webhook');
+          }
         }
 
         // 2. Update Technicians (Global Source of Truth)
@@ -317,7 +320,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }).then(res => {
         if (res.ok) {
             addToast(`${tech.name} Saved to Server!`, 'success');
-            syncTickets(true);
+            syncTickets(false);
             // Notify all tabs about new technician
             triggerDataSync('technician_added', { technicianId: newId });
         } else {
@@ -348,7 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }).then(res => {
           if (res.ok) {
               console.log('NEW_TICKET sent successfully, fetching fresh data...');
-              syncTickets(true);
+              syncTickets(false);
               // Notify all tabs about new ticket
               triggerDataSync('ticket_created', { ticketId: newTicket.id });
           } else {
