@@ -55,7 +55,7 @@ async function handleRead(req: any, res: any) {
     console.log('Reading from webhook:', readUrl);
     
     const response = await fetch(readUrl, {
-      method: "GET",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
     });
 
