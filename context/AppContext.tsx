@@ -144,6 +144,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('❌ Sync Failed:', e);
         setWebhookStatus(WebhookStatus.Error);
     } finally {
+          setTimeout(() => setIsAppLoading(false), 5000);
       if (!isBackground) setIsSyncing(false);
     }
   };
@@ -216,6 +217,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             checkWebhookHealth();
         }
     };
+        // Maximum timeout to ensure app doesn't hang indefinitely (10 seconds max)
+    const maxTimeoutId = setTimeout(() => setIsAppLoading(false), 10000);
+    return () => clearTimeout(maxTimeoutId);
+                  
 
     initApp();
   }, [checkWebhookHealth]);
@@ -321,8 +326,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (res.ok) {
             addToast(`${tech.name} Saved to Server!`, 'success');
             syncTickets(false);
-            // Notify all tabs about new technician
-            triggerDataSync('technician_added', { technicianId: newId });
         } else {
             addToast('Failed to add technician. Please try again.', 'error');
         }
@@ -352,8 +355,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (res.ok) {
               console.log('NEW_TICKET sent successfully, fetching fresh data...');
               syncTickets(false);
-              // Notify all tabs about new ticket
-              triggerDataSync('ticket_created', { ticketId: newTicket.id });
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
           }
@@ -375,8 +376,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }).then(res => {
           if (res.ok) {
               syncTickets(true);
-              // Notify all tabs about ticket update
-              triggerDataSync('ticket_updated', { ticketId: updatedTicket.id });
           } else {
               addToast('Failed to update job. Please try again.', 'error');
           }
@@ -473,20 +472,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshData = () => window.location.reload();
-
-  // LISTEN FOR DATA SYNC NOTIFICATIONS FROM OTHER TABS
-  useEffect(() => {
-    if (!user) return;
-    
-    const cleanup = listenForDataSync((notification) => {
-      console.log('📡 Received sync notification:', notification.type);
-      
-      // Refresh data when sync notification received
-      syncTickets(true);
-    });
-    
-    return cleanup;
-  }, [user]);
 
   return (
     <AppContext.Provider value={{ 
