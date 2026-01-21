@@ -325,7 +325,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }).then(res => {
         if (res.ok) {
             addToast(`${tech.name} Saved to Server!`, 'success');
-            syncTickets(false);
+            // Refresh technician list immediately
+            fetch('https://n8n.builderallindia.com/webhook/read-technician', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(readRes => readRes.json())
+            .then(techs => {
+                if (Array.isArray(techs)) {
+                    setTechnicians(techs);
+                }
+            })
+            .catch(err => console.error('Failed to refresh technicians:', err));
         } else {
             addToast('Failed to add technician. Please try again.', 'error');
         }
