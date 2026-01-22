@@ -1,7 +1,12 @@
 // Configuration
 const N8N_BASE_URL = 'https://n8n.builderallindia.com';
 const WEBHOOK_SUBMIT_PATH = '/webhook/PANDIT-GLEN-SERVICE-25-12-30';
-const WEBHOOK_READ_PATH = '/webhook/read-complaint';
+
+// Separate read webhooks for each sheet
+const WEBHOOK_READ_COMPLAINT = '/webhook/read-complaint';
+const WEBHOOK_READ_TECHNICIAN = '/webhook/read-technician';
+const WEBHOOK_READ_ATTENDANCE = '/webhook/read-attendance';
+const WEBHOOK_READ_JOB_COMPLETED = '/webhook/read-job-completed';
 
 export default async function handler(
   req: any,
@@ -11,8 +16,17 @@ export default async function handler(
     const { action } = req.query;
 
     // Route to appropriate handler
-    if (action === 'read') {
-      return await handleRead(req, res);
+    if (action === 'read-complaint') {
+      return await handleRead(req, res, WEBHOOK_READ_COMPLAINT);
+    } else if (action === 'read-technician') {
+      return await handleRead(req, res, WEBHOOK_READ_TECHNICIAN);
+    } else if (action === 'read-attendance') {
+      return await handleRead(req, res, WEBHOOK_READ_ATTENDANCE);
+    } else if (action === 'read-job-completed') {
+      return await handleRead(req, res, WEBHOOK_READ_JOB_COMPLETED);
+    } else if (action === 'read') {
+      // Default read - use complaint sheet
+      return await handleRead(req, res, WEBHOOK_READ_COMPLAINT);
     } else {
       return await handleWebhook(req, res);
     }
@@ -48,10 +62,10 @@ async function handleWebhook(req: any, res: any) {
   }
 }
 
-// Handle data reading from Google Sheets (NEW)
-async function handleRead(req: any, res: any) {
+// Handle data reading from Google Sheets (supports multiple sheets)
+async function handleRead(req: any, res: any, readPath: string) {
   try {
-    const readUrl = `${N8N_BASE_URL}${WEBHOOK_READ_PATH}`;
+    const readUrl = `${N8N_BASE_URL}${readPath}`;
     console.log('Reading from webhook:', readUrl);
     
     const response = await fetch(readUrl, {
