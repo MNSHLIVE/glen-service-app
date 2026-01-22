@@ -96,6 +96,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // Fetch tickets directly from server on app startup
+  const fetchTickets = async () => {
+    try {
+      const response = await fetch('/api/n8n-proxy?action=read-complaint');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setTickets(data);
+          // Also save to localStorage for offline fallback
+          localStorage.setItem('tickets', JSON.stringify(data));
+          console.log('✅ Fetched tickets from server:', data.length);
+        }
+      } else {
+        console.error('Failed to fetch tickets:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tickets:', error);
+    }
+  };
+
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
@@ -226,8 +246,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setTechnicians(TECHNICIANS);
             }
 
-            // Fetch fresh technicians from server on app startup
+            // Fetch fresh technicians and tickets from server on app startup
             await fetchTechnicians();
+            await fetchTickets();
 
             // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
             if (currentUser) {
