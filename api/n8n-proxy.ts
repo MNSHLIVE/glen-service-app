@@ -1,7 +1,7 @@
 // Configuration
 const N8N_BASE_URL = 'https://n8n.builderallindia.com';
 const WEBHOOK_SUBMIT_PATH = '/webhook/PANDIT-GLEN-SERVICE-25-12-30';
-const WEBHOOK_READ_PATH = '/webhook/glen-read-data';
+const WEBHOOK_READ_PATH = '/webhook/read-complaint';
 
 export default async function handler(
   req: any,

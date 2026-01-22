@@ -325,18 +325,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }).then(res => {
         if (res.ok) {
             addToast(`${tech.name} Saved to Server!`, 'success');
-            // Refresh technician list immediately
-            fetch('https://n8n.builderallindia.com/webhook/read-technician', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(readRes => readRes.json())
-            .then(techs => {
-                if (Array.isArray(techs)) {
-                    setTechnicians(techs);
-                }
-            })
-            .catch(err => console.error('Failed to refresh technicians:', err));
+            // IMMEDIATELY add to local state so it shows up in dropdown
+            setTechnicians(prev => [...prev, newTech]);
+            // Also save to localStorage as backup
+            localStorage.setItem('technicians', JSON.stringify([...technicians, newTech]));
+            // Trigger sync to get fresh data from server
+            syncTickets(true);
         } else {
             addToast('Failed to add technician. Please try again.', 'error');
         }
