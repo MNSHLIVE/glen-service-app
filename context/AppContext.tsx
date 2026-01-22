@@ -76,6 +76,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const { addToast } = useToast();
   
+  // Fetch technicians directly from server on app startup
+  const fetchTechnicians = async () => {
+    try {
+      const response = await fetch('/api/n8n-proxy?action=read-technician');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setTechnicians(data);
+          // Also save to localStorage for offline fallback
+          localStorage.setItem('technicians', JSON.stringify(data));
+          console.log('✅ Fetched technicians from server:', data.length);
+        }
+      } else {
+        console.error('Failed to fetch technicians:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to fetch technicians:', error);
+    }
+  };
+
   const syncTickets = async (isBackground: boolean = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
@@ -205,6 +225,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             } else {
                 setTechnicians(TECHNICIANS);
             }
+
+            // Fetch fresh technicians from server on app startup
+            await fetchTechnicians();
 
             // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
             if (currentUser) {
