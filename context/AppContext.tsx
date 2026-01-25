@@ -128,7 +128,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         syncOrigin: 'Device_Cloud_Handshake'
     };
     
-    if (!isBackground) console.log('Initiating Cloud Sync:', payload.function);
+    if (!isBackground) console.log('🔄 Initiating Cloud Sync:', payload.function);
 
     try {
       const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
@@ -139,6 +139,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Sync Response Received:', { ticketsCount: data.tickets?.length, techniciansCount: data.technicians?.length });
         
         // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
         if (data && Array.isArray(data.tickets)) {
@@ -151,6 +152,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             filteredTickets = filterTicketsByDays(data.tickets, TECHNICIAN_DATA_DAYS);
           }
           
+          console.log(`✅ Updated ${filteredTickets.length} tickets for ${user.role}`);
           setTickets(filteredTickets);
           if (!data.tickets || data.tickets.length === 0) {
             console.warn('⚠️ WARNING: Empty tickets response from webhook');
@@ -172,13 +174,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                      return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
                  });
                  
+                 console.log(`✅ Updated ${updated.length} technicians`);
                  return updated;
              });
         }
 
         setLastSyncTime(new Date());
         setWebhookStatus(WebhookStatus.Connected);
-        if (!isBackground) console.log('✅ Sync Success: Devices are now aligned.');
+        if (!isBackground) console.log('✅ Sync Success: All devices are now aligned.');
+      } else {
+        console.error('❌ Sync failed with status:', response.status);
+        setWebhookStatus(WebhookStatus.Error);
       }
     } catch (e) {
         console.error('❌ Sync Failed:', e);
@@ -402,13 +408,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           body: JSON.stringify(payload)
       }).then(res => {
           if (res.ok) {
-              console.log('NEW_TICKET sent successfully, fetching fresh data...');
-              syncTickets(false);
+              console.log('✅ NEW_TICKET sent successfully to webhook. Ticket ID:', newTicket.id);
+              console.log('⏳ Waiting 2 seconds for Google Sheet to update...');
+              // Wait 2 seconds for n8n to write to Google Sheet before reading
+              setTimeout(() => {
+                  console.log('📥 Now fetching fresh data from server...');
+                  syncTickets(false);
+              }, 2000);
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
+              console.error('❌ NEW_TICKET response failed:', res.status);
           }
       }).catch(err => {
-          console.error('NEW_TICKET error:', err);
+          console.error('❌ NEW_TICKET error:', err);
           addToast('Network error. Ticket may not have been saved.', 'error');
       });
   };
