@@ -443,7 +443,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               // Wait 2 seconds for n8n to write to Google Sheet before reading
               setTimeout(() => {
                   console.log('📥 Now fetching fresh data from server...');
-                  syncTickets(false);
+                  await loadTicketsFromServer();
+;
               }, 2000);
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
