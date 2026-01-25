@@ -169,7 +169,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const data = await response.json();
         console.log('📊 Sync Response Received:', { ticketsCount: data.tickets?.length, techniciansCount: data.technicians?.length });
         console.log('📋 Raw tickets from n8n:', data.tickets);
-        
+        if (!data || !data.tickets) {
+  console.warn("ℹ️ syncTickets skipped (no tickets payload)");
+  return;
+}
+
         // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
         if (data && Array.isArray(data.tickets)) {
           // Apply role-based day filtering (frontend only)
@@ -410,7 +414,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Also save to localStorage as backup
             localStorage.setItem('technicians', JSON.stringify([...technicians, newTech]));
             // Trigger sync to get fresh data from server
-            syncTickets(true);
+            ;
         } else {
             addToast('Failed to add technician. Please try again.', 'error');
         }
