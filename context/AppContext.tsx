@@ -14,14 +14,25 @@ const TECHNICIAN_DATA_DAYS = 2;
 const filterTicketsByDays = (tickets: Ticket[], days: number): Ticket[] => {
   const now = new Date();
   
-  return tickets.filter(ticket => {
-    if (!ticket.createdAt) return true;
+  const filtered = tickets.filter(ticket => {
+    if (!ticket.createdAt) {
+      console.warn('⚠️ Ticket missing createdAt:', ticket.id);
+      return true;
+    }
     
     const ticketDate = new Date(ticket.createdAt);
     const diffInDays = (now.getTime() - ticketDate.getTime()) / (1000 * 60 * 60 * 24);
     
-    return diffInDays <= days;
+    const isWithinRange = diffInDays <= days;
+    if (!isWithinRange) {
+      console.warn(`⚠️ Ticket ${ticket.id} filtered out: ${diffInDays.toFixed(2)} days old (max: ${days} days)`);
+    }
+    
+    return isWithinRange;
   });
+  
+  console.log(`🔍 Filtered tickets: ${tickets.length} → ${filtered.length} (max age: ${days} days)`);
+  return filtered;
 };
 
 interface AppContextType {
@@ -140,6 +151,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (response.ok) {
         const data = await response.json();
         console.log('📊 Sync Response Received:', { ticketsCount: data.tickets?.length, techniciansCount: data.technicians?.length });
+        console.log('📋 Raw tickets from n8n:', data.tickets);
         
         // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
         if (data && Array.isArray(data.tickets)) {
@@ -153,10 +165,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           console.log(`✅ Updated ${filteredTickets.length} tickets for ${user.role}`);
+          console.log('🎫 Final tickets to display:', filteredTickets);
           setTickets(filteredTickets);
           if (!data.tickets || data.tickets.length === 0) {
             console.warn('⚠️ WARNING: Empty tickets response from webhook');
           }
+        } else {
+          console.error('❌ ERROR: No tickets array in response');
         }
 
         // 2. Update Technicians (Global Source of Truth)

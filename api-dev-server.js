@@ -1,8 +1,8 @@
 // Local development server for API routes
 // Run this alongside Vite to handle /api/* requests locally
 
-const http = require('http');
-const url = require('url');
+import http from 'http';
+import url from 'url';
 
 // Configuration
 const N8N_BASE_URL = 'https://n8n.builderallindia.com';
