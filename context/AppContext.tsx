@@ -441,11 +441,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               console.log('✅ NEW_TICKET sent successfully to webhook. Ticket ID:', newTicket.id);
               console.log('⏳ Waiting 2 seconds for Google Sheet to update...');
               // Wait 2 seconds for n8n to write to Google Sheet before reading
-              setTimeout(() => {
-                  console.log('📥 Now fetching fresh data from server...');
-                  await loadTicketsFromServer();
-;
-              }, 2000);
+              setTimeout(async () => {
+  console.log('📥 Now fetching fresh data from server...');
+  await loadTicketsFromServer();
+}, 2000);
+
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
               console.error('❌ NEW_TICKET response failed:', res.status);
