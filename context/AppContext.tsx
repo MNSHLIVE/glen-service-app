@@ -86,7 +86,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const { addToast } = useToast();
-  
+  const loadTicketsFromServer = async () => {
+  try {
+    const res = await fetch(
+      "https://n8n.builderallindia.com/webhook/read-complaint",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      }
+    );
+
+    const data = await res.json();
+    setTickets(Array.isArray(data) ? data : []);
+  } catch (e) {
+    console.error("Ticket read failed", e);
+  }
+};
+
   // Fetch technicians directly from server on app startup
   const fetchTechnicians = async () => {
     try {
@@ -269,12 +286,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             // Fetch fresh technicians and tickets from server on app startup
             await fetchTechnicians();
-            await fetchTickets();
+            await loadTicketsFromServer();
 
-            // IF USER IS LOGGED IN, FORCE SYNC IMMEDIATELY
-            if (currentUser) {
-                await syncTickets(true);
-            }
         } catch (error) {
             console.error('App init fail:', error);
         } finally {
@@ -295,7 +308,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!user) return;
 
     const init = async () => {
-        await syncTickets(true);
+        await loadTicketsFromServer();
+
     };
 
     init();
@@ -306,7 +320,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const handleVisibilityChange = () => {
           if (document.visibilityState === 'visible' && user) {
               console.log('App resumed, syncing cloud data...');
-              syncTickets(true);
+              loadTicketsFromServer();
+;
           }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -563,3 +578,4 @@ export const useAppContext = () => {
   if (!context) throw new Error('useAppContext missing');
   return context;
 };
+
