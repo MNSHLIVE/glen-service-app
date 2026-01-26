@@ -85,7 +85,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updated: new Set()
   });
 
- const loadTicketsFromServer = async () => {
+const loadTicketsFromServer = async () => {
   try {
     const res = await fetch(
       "https://n8n.builderallindia.com/webhook/read-complaint",
@@ -105,16 +105,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const normalized: Ticket[] = data.map((t: any) => ({
       ...t,
-
-      // 🔒 FIX STATUS
       status:
         t.status === "Completed"
           ? TicketStatus.Completed
           : t.status === "InProgress"
           ? TicketStatus.InProgress
           : TicketStatus.New,
-
-      // 🔒 FIX DATES
       createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
       serviceBookingDate: t.serviceBookingDate
         ? new Date(t.serviceBookingDate)
@@ -126,6 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     console.error("Ticket read failed", e);
   }
 };
+
 
   // Fetch technicians directly from server on app startup
   const fetchTechnicians = async () => {
