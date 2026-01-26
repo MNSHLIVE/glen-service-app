@@ -110,6 +110,8 @@ const loadTicketsFromServer = async () => {
     }));
 
     setTickets(normalized);
+updateLastSyncTime(new Date());
+
   } catch (e) {
     console.error("Ticket read failed", e);
   }
