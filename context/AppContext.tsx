@@ -106,11 +106,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const loadTechniciansFromServer = async () => {
     try {
       const res = await fetch('/api/n8n-proxy?action=read-technician');
-      const data = await res.json();
+const raw = await res.json();
 
-      if (!Array.isArray(data)) return;
+// ✅ normalize response
+const techniciansArray =
+  Array.isArray(raw) ? raw :
+  Array.isArray(raw?.data) ? raw.data :
+  Array.isArray(raw?.technicians) ? raw.technicians :
+  [];
 
-      setTechnicians(data);
+setTechnicians(techniciansArray);
+localStorage.setItem('technicians', JSON.stringify(techniciansArray));
+
       localStorage.setItem('technicians', JSON.stringify(data));
     } catch (e) {
       console.error('read-technician failed', e);
