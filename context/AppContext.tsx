@@ -85,8 +85,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updated: new Set()
   });
 
-  const { addToast } = useToast();
-  const loadTicketsFromServer = async () => {
+ const loadTicketsFromServer = async () => {
   try {
     const res = await fetch(
       "https://n8n.builderallindia.com/webhook/read-complaint",
@@ -98,7 +97,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     const data = await res.json();
-    setTickets(Array.isArray(data) ? data : []);
+
+    if (!Array.isArray(data)) {
+      console.warn("Tickets payload not array", data);
+      return;
+    }
+
+    const normalized: Ticket[] = data.map((t: any) => ({
+      ...t,
+
+      // 🔒 FIX STATUS
+      status:
+        t.status === "Completed"
+          ? TicketStatus.Completed
+          : t.status === "InProgress"
+          ? TicketStatus.InProgress
+          : TicketStatus.New,
+
+      // 🔒 FIX DATES
+      createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
+      serviceBookingDate: t.serviceBookingDate
+        ? new Date(t.serviceBookingDate)
+        : new Date()
+    }));
+
+    setTickets(normalized);
   } catch (e) {
     console.error("Ticket read failed", e);
   }
