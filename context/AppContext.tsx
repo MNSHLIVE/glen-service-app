@@ -87,15 +87,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
 const loadTicketsFromServer = async () => {
   try {
-    const res = await fetch(
-      "https://n8n.builderallindia.com/webhook/read-complaint",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      }
-    );
-
+    const res = await fetch("/api/n8n-proxy?action=read-complaint");
     const data = await res.json();
 
     if (!Array.isArray(data)) {
@@ -122,6 +114,7 @@ const loadTicketsFromServer = async () => {
     console.error("Ticket read failed", e);
   }
 };
+
 
 
   // Fetch technicians directly from server on app startup
