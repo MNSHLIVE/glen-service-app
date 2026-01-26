@@ -71,13 +71,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
-  const pendingActions = useRef({
-    added: new Set<string>(),
-    deleted: new Set<string>(),
-    updated: new Set<string>(),
-  });
-
-  // ✅ ONLY ticket reader
+  // -------------------------
+  // READ TICKETS (ONLY PLACE)
+  // -------------------------
   const loadTicketsFromServer = async () => {
     try {
       const res = await fetch('/api/n8n-proxy?action=read-complaint');
@@ -104,7 +100,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // 🔧 technician-only sync
+  // -------------------------
+  // READ TECHNICIANS (IMPORTANT FIX)
+  // -------------------------
+  const loadTechniciansFromServer = async () => {
+    try {
+      const res = await fetch('/api/n8n-proxy?action=read-technician');
+      const data = await res.json();
+
+      if (!Array.isArray(data)) return;
+
+      setTechnicians(data);
+      localStorage.setItem('technicians', JSON.stringify(data));
+    } catch (e) {
+      console.error('read-technician failed', e);
+    }
+  };
+
+  // -------------------------
+  // TECHNICIAN SYNC ONLY
+  // -------------------------
   const syncTickets = async (isBackground = false) => {
     if (!user) return;
     if (!isBackground) setIsSyncing(true);
@@ -121,23 +136,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       if (!res.ok) throw new Error('sync failed');
-      const data = await res.json();
-
-      if (Array.isArray(data?.technicians)) {
-        setTechnicians(data.technicians);
-        localStorage.setItem('technicians', JSON.stringify(data.technicians));
-      }
 
       setWebhookStatus(WebhookStatus.Connected);
       setLastSyncTime(new Date());
-    } catch (e) {
+    } catch {
       setWebhookStatus(WebhookStatus.Error);
     } finally {
       if (!isBackground) setIsSyncing(false);
     }
   };
 
-  // 🔄 startup
+  // -------------------------
+  // APP STARTUP
+  // -------------------------
   useEffect(() => {
     const init = async () => {
       const savedUser = localStorage.getItem('currentUser');
@@ -146,8 +157,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const savedTechs = localStorage.getItem('technicians');
       setTechnicians(savedTechs ? JSON.parse(savedTechs) : TECHNICIANS);
 
+      await loadTechniciansFromServer();
       await loadTicketsFromServer();
       await checkWebhookHealth();
+
       setIsAppLoading(false);
     };
 
@@ -158,6 +171,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (user) loadTicketsFromServer();
   }, [user]);
 
+  // -------------------------
+  // AUTH
+  // -------------------------
   const login = (u: User) => {
     setUser(u);
     localStorage.setItem('currentUser', JSON.stringify(u));
@@ -170,6 +186,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('currentUser');
   };
 
+  // -------------------------
+  // TICKETS
+  // -------------------------
   const addTicket = (ticketData: any) => {
     const newTicket: Ticket = {
       ...ticketData,
@@ -204,7 +223,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             : 'UPDATE_TICKET',
         ticket,
       }),
-    }).then(() => syncTickets(true));
+    }).then(() => loadTicketsFromServer());
   };
 
   const reopenTicket = (id: string, techId: string, notes: string) => {
@@ -219,6 +238,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  // -------------------------
+  // TECHNICIANS (FIXED)
+  // -------------------------
   const addTechnician = (tech: any) => {
     const newTech = { ...tech, id: `tech-${Date.now()}`, points: 0 };
     addToast('Technician added', 'success');
@@ -227,7 +249,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ function: 'ADD_TECHNICIAN', technician: newTech }),
-    }).then(() => syncTickets(true));
+    }).then(loadTechniciansFromServer);
 
     return true;
   };
@@ -237,7 +259,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ function: 'UPDATE_TECHNICIAN', technician: tech }),
-    }).then(() => syncTickets(true));
+    }).then(loadTechniciansFromServer);
   };
 
   const deleteTechnician = (id: string) => {
@@ -245,9 +267,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ function: 'DELETE_TECHNICIAN', technicianId: id }),
-    }).then(() => syncTickets(true));
+    }).then(loadTechniciansFromServer);
   };
 
+  // -------------------------
+  // MISC
+  // -------------------------
   const markAttendance = (status: 'Clock In' | 'Clock Out') => {
     if (!user) return;
 
