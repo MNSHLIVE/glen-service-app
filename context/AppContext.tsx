@@ -175,9 +175,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 }
 
         // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
-        if (data && Array.isArray(data.tickets)) {
-          // Apply role-based day filtering (frontend only)
-          let filteredTickets = data.tickets;
+       if (data && Array.isArray(data.tickets)) {
+  // TEMP DISABLED – tickets now come from read-complaint
+  // setTickets(filteredTickets);
+}
+
           
           if (user?.role === 'Admin') {
             filteredTickets = filterTicketsByDays(data.tickets, ADMIN_DATA_DAYS);
@@ -448,6 +450,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setTimeout(async () => {
   console.log('📥 Now fetching fresh data from server...');
   await loadTicketsFromServer();
+  triggerDataSync('tickets_updated');
+
 }, 2000);
 
           } else {
