@@ -5,37 +5,14 @@ import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
 import { APP_CONFIG, APP_VERSION } from '../config';
 import { triggerDataSync, listenForDataSync, updateLastSyncTime } from '../utils/dataSync';
-import { WebhookStatus } from '../types';
+
 
 
 // Ticket visibility window (frontend only)
 const ADMIN_DATA_DAYS = 5;
 const TECHNICIAN_DATA_DAYS = 2;
 
-// Helper function to filter tickets by number of days
-const filterTicketsByDays = (tickets: Ticket[], days: number): Ticket[] => {
-  const now = new Date();
-  
-  const filtered = tickets.filter(ticket => {
-    if (!ticket.createdAt) {
-      console.warn('⚠️ Ticket missing createdAt:', ticket.id);
-      return true;
-    }
-    
-    const ticketDate = new Date(ticket.createdAt);
-    const diffInDays = (now.getTime() - ticketDate.getTime()) / (1000 * 60 * 60 * 24);
-    
-    const isWithinRange = diffInDays <= days;
-    if (!isWithinRange) {
-      console.warn(`⚠️ Ticket ${ticket.id} filtered out: ${diffInDays.toFixed(2)} days old (max: ${days} days)`);
-    }
-    
-    return isWithinRange;
-  });
-  
-  console.log(`🔍 Filtered tickets: ${tickets.length} → ${filtered.length} (max age: ${days} days)`);
-  return filtered;
-};
+
 
 interface AppContextType {
   user: User | null;
@@ -162,93 +139,55 @@ updateLastSyncTime(new Date());
   };
 
   const syncTickets = async (isBackground: boolean = false) => {
-    if (!user) return;
-    if (!isBackground) setIsSyncing(true);
-    
-    // FETCH_NEW_JOBS is the function that pulls everything (Tickets + Technicians) from the Google Sheet
-    const payload = {
-        function: 'FETCH_NEW_JOBS',
-        role: user.role,
-        technicianId: user.id,
-        syncOrigin: 'Device_Cloud_Handshake'
-    };
-    
-    if (!isBackground) console.log('🔄 Initiating Cloud Sync:', payload.function);
+  if (!user) return;
+  if (!isBackground) setIsSyncing(true);
 
-    try {
-      const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📊 Sync Response Received:', { ticketsCount: data.tickets?.length, techniciansCount: data.technicians?.length });
-        console.log('📋 Raw tickets from n8n:', data.tickets);
-        if (!data || !data.tickets) {
-  console.warn("ℹ️ syncTickets skipped (no tickets payload)");
-  return;
-}
-
-        // Map FETCH_NEW_JOBS tickets response to app state with role-based filtering
-       if (data && Array.isArray(data.tickets)) {
-  // TEMP DISABLED – tickets now come from read-complaint
-  // setTickets(filteredTickets);
-}
-
-          
-          if (user?.role === 'Admin') {
-            filteredTickets = filterTicketsByDays(data.tickets, ADMIN_DATA_DAYS);
-          } else if (user?.role === 'Technician') {
-            filteredTickets = filterTicketsByDays(data.tickets, TECHNICIAN_DATA_DAYS);
-          }
-          
-          console.log(`✅ Updated ${filteredTickets.length} tickets for ${user.role}`);
-          console.log('🎫 Final tickets to display:', filteredTickets);
-          setTickets(filteredTickets);
-          if (!data.tickets || data.tickets.length === 0) {
-            console.warn('⚠️ WARNING: Empty tickets response from webhook');
-          }
-        } else {
-          console.error('❌ ERROR: No tickets array in response');
-        }
-
-        // 2. Update Technicians (Global Source of Truth)
-        if (data.technicians && Array.isArray(data.technicians)) {
-             setTechnicians(prev => {
-                 let serverTechs = data.technicians;
-                 
-                 // Filter out items that are currently being deleted on THIS device
-                 serverTechs = serverTechs.filter((st: any) => !pendingActions.current.deleted.has(String(st.id)));
-                 
-                 const updated = serverTechs.map((st: any) => {
-                     const idStr = String(st.id);
-                     const existing = prev.find(p => String(p.id) === idStr);
-                     // Prioritize server points and name, but keep local "lastSeen" status for dots
-                     return { ...st, lastSeen: existing ? existing.lastSeen : undefined };
-                 });
-                 
-                 console.log(`✅ Updated ${updated.length} technicians`);
-                 return updated;
-             });
-        }
-
-        setLastSyncTime(new Date());
-        setWebhookStatus(WebhookStatus.Connected);
-        if (!isBackground) console.log('✅ Sync Success: All devices are now aligned.');
-      } else {
-        console.error('❌ Sync failed with status:', response.status);
-        setWebhookStatus(WebhookStatus.Error);
-      }
-    } catch (e) {
-        console.error('❌ Sync Failed:', e);
-        setWebhookStatus(WebhookStatus.Error);
-    } finally {
-          setTimeout(() => setIsAppLoading(false), 5000);
-      if (!isBackground) setIsSyncing(false);
-    }
+  const payload = {
+    function: 'FETCH_NEW_JOBS',
+    role: user.role,
+    technicianId: user.id,
+    syncOrigin: 'Device_Cloud_Handshake'
   };
+
+  try {
+    const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      setWebhookStatus(WebhookStatus.Error);
+      return;
+    }
+
+    const data = await response.json();
+
+    // ✅ TECHNICIANS ONLY
+    if (Array.isArray(data?.technicians)) {
+      setTechnicians(prev => {
+        const serverTechs = data.technicians.filter(
+          (t: any) => !pendingActions.current.deleted.has(String(t.id))
+        );
+
+        return serverTechs.map((t: any) => {
+          const existing = prev.find(p => String(p.id) === String(t.id));
+          return { ...t, lastSeen: existing?.lastSeen };
+        });
+      });
+    }
+
+    setLastSyncTime(new Date());
+    setWebhookStatus(WebhookStatus.Connected);
+
+  } catch (err) {
+    console.error('❌ syncTickets failed:', err);
+    setWebhookStatus(WebhookStatus.Error);
+  } finally {
+    if (!isBackground) setIsSyncing(false);
+  }
+};
+
 
   const sendHeartbeat = useCallback(() => {
       if (!user || user.role !== UserRole.Technician) return;
@@ -467,9 +406,7 @@ updateLastSyncTime(new Date());
               setTimeout(async () => {
   console.log('📥 Now fetching fresh data from server...');
   await loadTicketsFromServer();
-  triggerDataSync('tickets_updated');
-
-}, 2000);
+  triggerDataSync('tickets_updated')}, 2000);
 
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
