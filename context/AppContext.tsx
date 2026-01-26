@@ -5,6 +5,8 @@ import { TECHNICIANS, INITIAL_TICKETS } from '../constants';
 import { useToast } from './ToastContext';
 import { APP_CONFIG, APP_VERSION } from '../config';
 import { triggerDataSync, listenForDataSync, updateLastSyncTime } from '../utils/dataSync';
+import { WebhookStatus } from '../types';
+
 
 // Ticket visibility window (frontend only)
 const ADMIN_DATA_DAYS = 5;
