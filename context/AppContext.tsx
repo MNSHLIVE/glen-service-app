@@ -12,8 +12,6 @@ import { triggerDataSync, listenForDataSync, updateLastSyncTime } from '../utils
 const ADMIN_DATA_DAYS = 5;
 const TECHNICIAN_DATA_DAYS = 2;
 
-
-
 interface AppContextType {
   user: User | null;
   tickets: Ticket[];
@@ -410,10 +408,9 @@ updateLastSyncTime(new Date());
 
           } else {
               addToast('Failed to save ticket. Please try again.', 'error');
-              console.error('❌ NEW_TICKET response failed:', res.status);
           }
       }).catch(err => {
-          console.error('❌ NEW_TICKET error:', err);
+          console.error('NEW_TICKET error:', err);
           addToast('Network error. Ticket may not have been saved.', 'error');
       });
   };
