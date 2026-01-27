@@ -5,8 +5,12 @@ import React, {
   useState,
   ReactNode,
 } from 'react';
-import { TicketStatus, User, UserRole } from '../types';
+import { TicketStatus, User } from '../types';
 import { APP_CONFIG } from '../config';
+
+/* =====================================================
+   CONTEXT TYPE
+===================================================== */
 
 interface AppContextType {
   user: User | null;
@@ -15,40 +19,39 @@ interface AppContextType {
   isAppLoading: boolean;
   login: (u: User) => void;
   logout: () => void;
-  addTicket: (t: any) => void;
+  addTicket: (t: any) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* -----------------------------------------
-   🔒 PERMANENT NORMALIZER (CORE FIX)
------------------------------------------- */
+/* =====================================================
+   🔒 NORMALIZERS (PERMANENT CORE FIX)
+===================================================== */
 
+/* ---------- TICKETS ---------- */
 function normalizeTicketFromSheet(row: any) {
   if (!row) return null;
 
-  const ticketId = String(row.ticket_id || '').trim();
-  const customerName = String(row.customer_name || '').trim();
+  const ticket_id = String(row.ticket_id || '').trim();
+  const customer_name = String(row.customer_name || '').trim();
   const complaint = String(row.complaint || '').trim();
 
   // HARD FILTER — ignore garbage rows
-  if (!ticketId || !customerName || !complaint) return null;
+  if (!ticket_id || !customer_name || !complaint) return null;
 
-  // Normalize status
   const rawStatus = String(row.status || '').toLowerCase();
   let status = TicketStatus.New;
   if (rawStatus.includes('progress')) status = TicketStatus.InProgress;
   if (rawStatus.includes('complete')) status = TicketStatus.Completed;
 
-  // Safe date handling
   const safeDate = (v: any) => {
     const d = new Date(v);
     return isNaN(d.getTime()) ? new Date() : d;
   };
 
   return {
-    id: ticketId,
-    customerName,
+    id: ticket_id,
+    customerName: customer_name,
     phone: String(row.phone || ''),
     address: String(row.address || ''),
     serviceCategory: String(row.service_category || ''),
@@ -64,24 +67,62 @@ function normalizeTicketFromSheet(row: any) {
   };
 }
 
-/* -----------------------------------------
-   PROVIDER
------------------------------------------- */
+/* ---------- TECHNICIANS ---------- */
+function normalizeTechnicianFromSheet(row: any) {
+  if (!row) return null;
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const technician_id = String(row.technician_id || '').trim();
+  const technician_name = String(row.technician_name || '').trim();
+
+  // HARD FILTER
+  if (!technician_id || !technician_name) return null;
+
+  // Hide deleted / inactive
+  if (
+    String(row.status || '').toLowerCase() === 'deleted' ||
+    row.deleted_at
+  ) {
+    return null;
+  }
+
+  return {
+    technician_id,
+    technician_name,
+    pin: row.pin ? String(row.pin) : '',
+    phone: row.phone ? String(row.phone) : '',
+    role: row.role || 'Technician',
+    vehicleNumber: row.vehicleNumber || '',
+    status: String(row.status || 'active').toLowerCase(),
+  };
+}
+
+/* =====================================================
+   PROVIDER
+===================================================== */
+
+export const AppProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
 
-  /* -------- READ TECHNICIANS -------- */
+  /* ---------- READ TECHNICIANS ---------- */
   const loadTechnicians = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-technician');
     const data = await res.json();
-    if (Array.isArray(data)) setTechnicians(data);
+
+    if (!Array.isArray(data)) return;
+
+    const cleanTechnicians = data
+      .map(normalizeTechnicianFromSheet)
+      .filter(Boolean);
+
+    setTechnicians(cleanTechnicians);
   };
 
-  /* -------- READ TICKETS (FIXED) -------- */
+  /* ---------- READ TICKETS ---------- */
   const loadTickets = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-complaint');
     const data = await res.json();
@@ -95,7 +136,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTickets(cleanTickets);
   };
 
-  /* -------- INIT -------- */
+  /* ---------- INIT ---------- */
   useEffect(() => {
     const init = async () => {
       const savedUser = localStorage.getItem('currentUser');
@@ -110,7 +151,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     init();
   }, []);
 
-  /* -------- ACTIONS -------- */
+  /* ---------- AUTH ---------- */
   const login = (u: User) => {
     setUser(u);
     localStorage.setItem('currentUser', JSON.stringify(u));
@@ -121,15 +162,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('currentUser');
   };
 
+  /* ---------- ADD TICKET ---------- */
   const addTicket = async (ticket: any) => {
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ function: 'NEW_TICKET', ticket }),
+      body: JSON.stringify({
+        function: 'NEW_TICKET',
+        ticket,
+      }),
     });
 
-    // Re-read clean data
-    setTimeout(loadTickets, 1500);
+    // re-read clean source of truth
+    setTimeout(loadTickets, 1200);
   };
 
   return (
@@ -148,6 +193,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     </AppContext.Provider>
   );
 };
+
+/* =====================================================
+   HOOK
+===================================================== */
 
 export const useAppContext = () => {
   const ctx = useContext(AppContext);
