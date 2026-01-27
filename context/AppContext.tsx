@@ -20,7 +20,9 @@ interface AppContextType {
   login: (u: User) => void;
   logout: () => void;
   addTicket: (t: any) => Promise<void>;
+  addTechnician: (t: any) => Promise<void>; // ✅ ADD THIS
 }
+
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -176,23 +178,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     // re-read clean source of truth
     setTimeout(loadTickets, 1200);
   };
+    /* ---------- ADD TECHNICIAN ---------- */
+  const addTechnician = async (technician: any) => {
+    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'ADD_TECHNICIAN',
+        technician,
+      }),
+    });
+
+    // 🔁 refresh technician list
+    setTimeout(loadTechnicians, 1200);
+  };
+
 
   return (
     <AppContext.Provider
-      value={{
-        user,
-        tickets,
-        technicians,
-        isAppLoading,
-        login,
-        logout,
-        addTicket,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
-};
+  value={{
+    user,
+    tickets,
+    technicians,
+    isAppLoading,
+    login,
+    logout,
+    addTicket,
+    addTechnician, // ✅ ADD THIS LINE
+  }}
+>
 
 /* =====================================================
    HOOK
