@@ -20,17 +20,41 @@ interface AppContextType {
   login: (u: User) => void;
   logout: () => void;
   addTicket: (t: any) => Promise<void>;
-  addTechnician: (t: any) => Promise<void>; // ✅ ADD THIS
+  addTechnician: (t: any) => Promise<void>;
 }
-
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 /* =====================================================
-   🔒 NORMALIZERS (PERMANENT CORE FIX)
+   NORMALIZERS (PERMANENT FIX)
 ===================================================== */
 
-/* ---------- TICKETS ---------- */
+function normalizeTechnicianFromSheet(row: any) {
+  if (!row) return null;
+
+  const technician_id = String(row.technician_id || '').trim();
+  const technician_name = String(row.technician_name || '').trim();
+
+  if (!technician_id || !technician_name) return null;
+
+  if (
+    String(row.status || '').toLowerCase() === 'deleted' ||
+    row.deleted_at
+  ) {
+    return null;
+  }
+
+  return {
+    technician_id,
+    technician_name,
+    pin: row.pin ? String(row.pin) : '',
+    phone: row.phone ? String(row.phone) : '',
+    role: row.role || 'Technician',
+    vehicleNumber: row.vehicleNumber || '',
+    status: String(row.status || 'active').toLowerCase(),
+  };
+}
+
 function normalizeTicketFromSheet(row: any) {
   if (!row) return null;
 
@@ -38,7 +62,6 @@ function normalizeTicketFromSheet(row: any) {
   const customer_name = String(row.customer_name || '').trim();
   const complaint = String(row.complaint || '').trim();
 
-  // HARD FILTER — ignore garbage rows
   if (!ticket_id || !customer_name || !complaint) return null;
 
   const rawStatus = String(row.status || '').toLowerCase();
@@ -69,35 +92,6 @@ function normalizeTicketFromSheet(row: any) {
   };
 }
 
-/* ---------- TECHNICIANS ---------- */
-function normalizeTechnicianFromSheet(row: any) {
-  if (!row) return null;
-
-  const technician_id = String(row.technician_id || '').trim();
-  const technician_name = String(row.technician_name || '').trim();
-
-  // HARD FILTER
-  if (!technician_id || !technician_name) return null;
-
-  // Hide deleted / inactive
-  if (
-    String(row.status || '').toLowerCase() === 'deleted' ||
-    row.deleted_at
-  ) {
-    return null;
-  }
-
-  return {
-    technician_id,
-    technician_name,
-    pin: row.pin ? String(row.pin) : '',
-    phone: row.phone ? String(row.phone) : '',
-    role: row.role || 'Technician',
-    vehicleNumber: row.vehicleNumber || '',
-    status: String(row.status || 'active').toLowerCase(),
-  };
-}
-
 /* =====================================================
    PROVIDER
 ===================================================== */
@@ -117,11 +111,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
     if (!Array.isArray(data)) return;
 
-    const cleanTechnicians = data
+    const clean = data
       .map(normalizeTechnicianFromSheet)
       .filter(Boolean);
 
-    setTechnicians(cleanTechnicians);
+    setTechnicians(clean);
   };
 
   /* ---------- READ TICKETS ---------- */
@@ -131,11 +125,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
     if (!Array.isArray(data)) return;
 
-    const cleanTickets = data
+    const clean = data
       .map(normalizeTicketFromSheet)
       .filter(Boolean);
 
-    setTickets(cleanTickets);
+    setTickets(clean);
   };
 
   /* ---------- INIT ---------- */
@@ -175,10 +169,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       }),
     });
 
-    // re-read clean source of truth
     setTimeout(loadTickets, 1200);
   };
-    /* ---------- ADD TECHNICIAN ---------- */
+
+  /* ---------- ADD TECHNICIAN ---------- */
   const addTechnician = async (technician: any) => {
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
@@ -189,24 +183,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       }),
     });
 
-    // 🔁 refresh technician list
     setTimeout(loadTechnicians, 1200);
   };
 
-
   return (
     <AppContext.Provider
-  value={{
-    user,
-    tickets,
-    technicians,
-    isAppLoading,
-    login,
-    logout,
-    addTicket,
-    addTechnician, // ✅ ADD THIS LINE
-  }}
->
+      value={{
+        user,
+        tickets,
+        technicians,
+        isAppLoading,
+        login,
+        logout,
+        addTicket,
+        addTechnician,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
 
 /* =====================================================
    HOOK
