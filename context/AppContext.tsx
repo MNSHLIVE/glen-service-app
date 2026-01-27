@@ -1,148 +1,119 @@
 import React, {
   createContext,
   useContext,
-  useState,
   useEffect,
+  useState,
   ReactNode,
-  useCallback,
 } from 'react';
-
-import {
-  User,
-  Ticket,
-  Technician,
-  TicketStatus,
-  UserRole,
-  WebhookStatus,
-} from '../types';
-
-import { useToast } from './ToastContext';
-import { APP_CONFIG, APP_VERSION } from '../config';
-
-/* -------------------- CONTEXT TYPE -------------------- */
+import { TicketStatus, User, UserRole } from '../types';
+import { APP_CONFIG } from '../config';
 
 interface AppContextType {
   user: User | null;
-  technicians: Technician[];
-  tickets: Ticket[];
+  tickets: any[];
+  technicians: any[];
   isAppLoading: boolean;
-  webhookStatus: WebhookStatus;
-
   login: (u: User) => void;
   logout: () => void;
-
-  addTechnician: (tech: Omit<Technician, 'id' | 'points'>) => boolean;
-  addTicket: (ticket: any) => void;
-
-  syncTechnicians: () => Promise<void>;
-  syncTickets: () => Promise<void>;
+  addTicket: (t: any) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* -------------------- NORMALIZERS -------------------- */
+/* -----------------------------------------
+   🔒 PERMANENT NORMALIZER (CORE FIX)
+------------------------------------------ */
 
-/**
- * THIS IS THE CRITICAL FIX
- * Converts Google Sheet rows → UI-safe Technician objects
- */
-const normalizeTechnicians = (rows: any[]): Technician[] => {
-  return rows
-    .filter(r => r.technician_id && r.technician_name)
-    .filter(r => !r.deleted_at || r.deleted_at === '-')
-    .filter(r => String(r.status).toLowerCase() !== 'deleted')
-    .map(r => ({
-      id: String(r.technician_id).trim(),
-      name: String(r.technician_name).trim(),
-      password: r.pin ? String(r.pin) : '',
-      points: Number(r.points) || 0,
-      status: r.status || 'ACTIVE',
-      phone: r.phone || '',
-      role: r.role || 'Technician',
-      vehicleNumber: r.vehicleNumber || '',
-      lastSeen: r.last_seen ? new Date(r.last_seen) : undefined,
-    }));
-};
+function normalizeTicketFromSheet(row: any) {
+  if (!row) return null;
 
-const normalizeTickets = (rows: any[]): Ticket[] => {
-  return rows.map(r => ({
-    ...r,
-    id: String(r.id),
-    status:
-      r.status === 'Completed'
-        ? TicketStatus.Completed
-        : r.status === 'InProgress'
-        ? TicketStatus.InProgress
-        : TicketStatus.New,
-    createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
-    serviceBookingDate: r.serviceBookingDate
-      ? new Date(r.serviceBookingDate)
-      : new Date(),
-  }));
-};
+  const ticketId = String(row.ticket_id || '').trim();
+  const customerName = String(row.customer_name || '').trim();
+  const complaint = String(row.complaint || '').trim();
 
-/* -------------------- PROVIDER -------------------- */
+  // HARD FILTER — ignore garbage rows
+  if (!ticketId || !customerName || !complaint) return null;
+
+  // Normalize status
+  const rawStatus = String(row.status || '').toLowerCase();
+  let status = TicketStatus.New;
+  if (rawStatus.includes('progress')) status = TicketStatus.InProgress;
+  if (rawStatus.includes('complete')) status = TicketStatus.Completed;
+
+  // Safe date handling
+  const safeDate = (v: any) => {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  return {
+    id: ticketId,
+    customerName,
+    phone: String(row.phone || ''),
+    address: String(row.address || ''),
+    serviceCategory: String(row.service_category || ''),
+    complaint,
+    technicianId: String(row.assigned_technician || ''),
+    status,
+    createdAt: safeDate(row.created_at),
+    serviceBookingDate: safeDate(row.service_booking_date),
+    preferredTime: String(row.preferred_time || ''),
+    productMake: String(row.product_make || ''),
+    productCategory: String(row.product_category || ''),
+    updatedAt: safeDate(row.updated_at),
+  };
+}
+
+/* -----------------------------------------
+   PROVIDER
+------------------------------------------ */
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { addToast } = useToast();
-
   const [user, setUser] = useState<User | null>(null);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
-  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>(
-    WebhookStatus.Unknown
-  );
 
-  /* -------------------- FETCH TECHNICIANS -------------------- */
+  /* -------- READ TECHNICIANS -------- */
+  const loadTechnicians = async () => {
+    const res = await fetch('/api/n8n-proxy?action=read-technician');
+    const data = await res.json();
+    if (Array.isArray(data)) setTechnicians(data);
+  };
 
-  const syncTechnicians = useCallback(async () => {
-    try {
-      const res = await fetch('/api/n8n-proxy?action=read-technician');
-      const raw = await res.json();
+  /* -------- READ TICKETS (FIXED) -------- */
+  const loadTickets = async () => {
+    const res = await fetch('/api/n8n-proxy?action=read-complaint');
+    const data = await res.json();
 
-      if (!Array.isArray(raw)) {
-        console.warn('read-technician returned non-array', raw);
-        setTechnicians([]);
-        return;
-      }
+    if (!Array.isArray(data)) return;
 
-      const normalized = normalizeTechnicians(raw);
-      setTechnicians(normalized);
-      localStorage.setItem('technicians', JSON.stringify(normalized));
-    } catch (e) {
-      console.error('Failed to load technicians', e);
-      setTechnicians([]);
-    }
+    const cleanTickets = data
+      .map(normalizeTicketFromSheet)
+      .filter(Boolean);
+
+    setTickets(cleanTickets);
+  };
+
+  /* -------- INIT -------- */
+  useEffect(() => {
+    const init = async () => {
+      const savedUser = localStorage.getItem('currentUser');
+      if (savedUser) setUser(JSON.parse(savedUser));
+
+      await loadTechnicians();
+      await loadTickets();
+
+      setIsAppLoading(false);
+    };
+
+    init();
   }, []);
 
-  /* -------------------- FETCH TICKETS -------------------- */
-
-  const syncTickets = useCallback(async () => {
-    try {
-      const res = await fetch('/api/n8n-proxy?action=read-complaint');
-      const raw = await res.json();
-
-      if (!Array.isArray(raw)) {
-        console.warn('read-complaint returned non-array', raw);
-        setTickets([]);
-        return;
-      }
-
-      setTickets(normalizeTickets(raw));
-    } catch (e) {
-      console.error('Failed to load tickets', e);
-      setTickets([]);
-    }
-  }, []);
-
-  /* -------------------- LOGIN / LOGOUT -------------------- */
-
+  /* -------- ACTIONS -------- */
   const login = (u: User) => {
     setUser(u);
     localStorage.setItem('currentUser', JSON.stringify(u));
-    syncTechnicians();
-    syncTickets();
   };
 
   const logout = () => {
@@ -150,94 +121,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('currentUser');
   };
 
-  /* -------------------- ADD TECHNICIAN -------------------- */
-
-  const addTechnician = (tech: Omit<Technician, 'id' | 'points'>): boolean => {
-    const newTech = {
-      ...tech,
-      id: `tech${Date.now()}`,
-      points: 0,
-    };
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+  const addTicket = async (ticket: any) => {
+    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ADD_TECHNICIAN',
-        technician: newTech,
-      }),
-    })
-      .then(res => {
-        if (res.ok) {
-          addToast('Technician added', 'success');
-          setTimeout(syncTechnicians, 1000);
-        } else {
-          addToast('Failed to add technician', 'error');
-        }
-      })
-      .catch(() => addToast('Network error', 'error'));
+      body: JSON.stringify({ function: 'NEW_TICKET', ticket }),
+    });
 
-    return true;
+    // Re-read clean data
+    setTimeout(loadTickets, 1500);
   };
-
-  /* -------------------- ADD TICKET -------------------- */
-
-  const addTicket = (ticketData: any) => {
-    const ticket: Ticket = {
-      ...ticketData,
-      id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: TicketStatus.New,
-      createdAt: new Date(),
-      serviceBookingDate: new Date(),
-    };
-
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'NEW_TICKET',
-        ticket,
-      }),
-    })
-      .then(res => {
-        if (res.ok) {
-          addToast('Ticket created', 'success');
-          setTimeout(syncTickets, 1500);
-        } else {
-          addToast('Ticket creation failed', 'error');
-        }
-      })
-      .catch(() => addToast('Network error', 'error'));
-  };
-
-  /* -------------------- INITIAL LOAD -------------------- */
-
-  useEffect(() => {
-    const saved = localStorage.getItem('currentUser');
-    if (saved) setUser(JSON.parse(saved));
-
-    syncTechnicians();
-    syncTickets();
-
-    setTimeout(() => setIsAppLoading(false), 1000);
-  }, [syncTechnicians, syncTickets]);
-
-  /* -------------------- CONTEXT VALUE -------------------- */
 
   return (
     <AppContext.Provider
       value={{
         user,
-        technicians,
         tickets,
+        technicians,
         isAppLoading,
-        webhookStatus,
         login,
         logout,
-        addTechnician,
         addTicket,
-        syncTechnicians,
-        syncTickets,
       }}
     >
       {children}
@@ -245,10 +149,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
-/* -------------------- HOOK -------------------- */
-
 export const useAppContext = () => {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useAppContext must be inside AppProvider');
+  if (!ctx) throw new Error('useAppContext missing');
   return ctx;
 };
