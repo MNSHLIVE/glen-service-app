@@ -6,11 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { TicketStatus, User } from '../types';
-import { APP_CONFIG } from '../config';
-
-/* =====================================================
-   CONTEXT TYPE
-===================================================== */
+import { APP_CONFIG, APP_VERSION } from '../config';
 
 interface AppContextType {
   user: User | null;
@@ -25,86 +21,62 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* =====================================================
-   NORMALIZERS (PERMANENT FIX)
-===================================================== */
+/* ---------------- NORMALIZERS ---------------- */
 
 function normalizeTechnicianFromSheet(row: any) {
   if (!row) return null;
 
-  const technician_id = String(row.technician_id || '').trim();
-  const technician_name = String(row.technician_name || '').trim();
+  const id = String(row.technician_id || '').trim();
+  const name = String(row.technician_name || '').trim();
+  const pin = row.pin;
 
-  if (!technician_id || !technician_name) return null;
-
-  if (
-    String(row.status || '').toLowerCase() === 'deleted' ||
-    row.deleted_at
-  ) {
-    return null;
-  }
+  if (!id || !name) return null;
 
   return {
-    technician_id,
-    technician_name,
-    pin: row.pin ? String(row.pin) : '',
-    phone: row.phone ? String(row.phone) : '',
+    id,
+    name,
+    pin,
+    status: row.status || 'ACTIVE',
+    phone: row.phone || '',
     role: row.role || 'Technician',
     vehicleNumber: row.vehicleNumber || '',
-    status: String(row.status || 'active').toLowerCase(),
   };
 }
 
 function normalizeTicketFromSheet(row: any) {
   if (!row) return null;
 
-  const ticket_id = String(row.ticket_id || '').trim();
-  const customer_name = String(row.customer_name || '').trim();
+  const id = String(row.ticket_id || '').trim();
+  const customerName = String(row.customer_name || '').trim();
   const complaint = String(row.complaint || '').trim();
 
-  if (!ticket_id || !customer_name || !complaint) return null;
+  if (!id || !customerName || !complaint) return null;
 
-  const rawStatus = String(row.status || '').toLowerCase();
   let status = TicketStatus.New;
-  if (rawStatus.includes('progress')) status = TicketStatus.InProgress;
-  if (rawStatus.includes('complete')) status = TicketStatus.Completed;
-
-  const safeDate = (v: any) => {
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? new Date() : d;
-  };
+  const raw = String(row.status || '').toLowerCase();
+  if (raw.includes('progress')) status = TicketStatus.InProgress;
+  if (raw.includes('complete')) status = TicketStatus.Completed;
 
   return {
-    id: ticket_id,
-    customerName: customer_name,
-    phone: String(row.phone || ''),
-    address: String(row.address || ''),
-    serviceCategory: String(row.service_category || ''),
+    id,
+    customerName,
     complaint,
-    technicianId: String(row.assigned_technician || ''),
+    phone: row.phone || '',
     status,
-    createdAt: safeDate(row.created_at),
-    serviceBookingDate: safeDate(row.service_booking_date),
-    preferredTime: String(row.preferred_time || ''),
-    productMake: String(row.product_make || ''),
-    productCategory: String(row.product_category || ''),
-    updatedAt: safeDate(row.updated_at),
+    technicianId: row.technician_id || '',
+    createdAt: new Date(row.created_at || Date.now()),
   };
 }
 
-/* =====================================================
-   PROVIDER
-===================================================== */
+/* ---------------- PROVIDER ---------------- */
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
 
-  /* ---------- READ TECHNICIANS ---------- */
+  /* -------- READ TECHNICIANS -------- */
   const loadTechnicians = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-technician');
     const data = await res.json();
@@ -118,7 +90,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setTechnicians(clean);
   };
 
-  /* ---------- READ TICKETS ---------- */
+  /* -------- READ TICKETS -------- */
   const loadTickets = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-complaint');
     const data = await res.json();
@@ -132,22 +104,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setTickets(clean);
   };
 
-  /* ---------- INIT ---------- */
+  /* -------- INIT -------- */
   useEffect(() => {
     const init = async () => {
-      const savedUser = localStorage.getItem('currentUser');
-      if (savedUser) setUser(JSON.parse(savedUser));
+      const saved = localStorage.getItem('currentUser');
+      if (saved) setUser(JSON.parse(saved));
 
       await loadTechnicians();
       await loadTickets();
 
       setIsAppLoading(false);
     };
-
     init();
   }, []);
 
-  /* ---------- AUTH ---------- */
+  /* -------- ACTIONS -------- */
+
   const login = (u: User) => {
     setUser(u);
     localStorage.setItem('currentUser', JSON.stringify(u));
@@ -158,32 +130,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     localStorage.removeItem('currentUser');
   };
 
-  /* ---------- ADD TICKET ---------- */
   const addTicket = async (ticket: any) => {
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'NEW_TICKET',
-        ticket,
-      }),
+      body: JSON.stringify({ function: 'NEW_TICKET', ticket }),
     });
 
-    setTimeout(loadTickets, 1200);
+    setTimeout(loadTickets, 1500);
   };
 
-  /* ---------- ADD TECHNICIAN ---------- */
-  const addTechnician = async (technician: any) => {
+  const addTechnician = async (tech: any) => {
+    const payload = {
+      function: 'ADD_TECHNICIAN',
+      technician_id: `tech-${Date.now()}`,
+      technician_name: tech.name,
+      pin: tech.pin,
+      points: 0,
+      status: 'ACTIVE',
+      created_at: new Date().toISOString(),
+      deleted_at: '',
+      app_version: APP_VERSION,
+      last_seen: '',
+      phone: tech.phone || '',
+      role: 'Technician',
+      vehicleNumber: tech.vehicleNumber || '',
+    };
+
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ADD_TECHNICIAN',
-        technician,
-      }),
+      body: JSON.stringify(payload),
     });
 
-    setTimeout(loadTechnicians, 1200);
+    setTimeout(loadTechnicians, 1500);
   };
 
   return (
@@ -203,10 +183,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     </AppContext.Provider>
   );
 };
-
-/* =====================================================
-   HOOK
-===================================================== */
 
 export const useAppContext = () => {
   const ctx = useContext(AppContext);
