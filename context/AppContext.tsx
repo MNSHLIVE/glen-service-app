@@ -78,17 +78,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   /* -------- READ TECHNICIANS -------- */
   const loadTechnicians = async () => {
-    const res = await fetch('/api/n8n-proxy?action=read-technician');
-    const data = await res.json();
+  const res = await fetch('/api/n8n-proxy?action=read-technician');
+  const data = await res.json();
 
-    if (!Array.isArray(data)) return;
+  if (!Array.isArray(data)) return;
 
-    const clean = data
-      .map(normalizeTechnicianFromSheet)
-      .filter(Boolean);
+  const clean = data
+    .map(normalizeTechnicianFromSheet)
+    .filter(Boolean);
 
-    setTechnicians(clean);
-  };
+  setTechnicians(clean);
+};
+
 
   /* -------- READ TICKETS -------- */
   const loadTickets = async () => {
@@ -141,30 +142,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addTechnician = async (tech: any) => {
-    const payload = {
-      function: 'ADD_TECHNICIAN',
-      technician_id: `tech-${Date.now()}`,
-      technician_name: tech.name,
-      pin: tech.pin,
-      points: 0,
-      status: 'ACTIVE',
-      created_at: new Date().toISOString(),
-      deleted_at: '',
-      app_version: APP_VERSION,
-      last_seen: '',
-      phone: tech.phone || '',
-      role: 'Technician',
-      vehicleNumber: tech.vehicleNumber || '',
-    };
+  const technicianId = `TECH-${Date.now()}`;
 
-    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+  const payload = {
+    function: 'ADD_TECHNICIAN',
 
-    setTimeout(loadTechnicians, 1500);
+    // 🔑 PRIMARY KEYS (ABSOLUTE MUST)
+    technician_id: technicianId,
+    technician_name: tech.technician_name || tech.name,
+
+    // OPTIONAL BUT STRUCTURED
+    pin: tech.pin || '',
+    phone: tech.phone || '',
+    role: tech.role || 'Technician',
+    vehicleNumber: tech.vehicleNumber || '',
+    points: 0,
+    status: 'ACTIVE',
+
+    created_at: new Date().toISOString(),
+    deleted_at: '',
+    app_version: 'v4.6.3',
+    last_seen: '',
   };
+
+  await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  alert('✅ Technician added successfully');
+
+  setTimeout(loadTechnicians, 1500);
+};
+
 
   return (
     <AppContext.Provider
