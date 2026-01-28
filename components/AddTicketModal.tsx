@@ -44,29 +44,35 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
     // ✅ Generate ticket ID
     const ticket_id = 'TKT-' + Date.now();
 
-    const newTicketData = {
-      ticket_id,
-      customerName,
-      phone,
-      address,
-      complaint,
-      technicianId,
-      serviceCategory,
-      preferredTime,
-      adminNotes,
-      productDetails: {
-        make: 'Glen',
-        segment: '',
-        category: serviceCategory,
-        subCategory: '',
-        product: '',
-      },
-      symptoms: [],
-    };
+const newTicketData = {
+  // 🔑 REQUIRED BY UI
+  id: ticket_id,
+  ticket_id: ticket_id,
+  status: TicketStatus.New,
+  serviceBookingDate: new Date().toISOString(),
+  isEscalated: false,
 
-    addTicket(newTicketData);
-    onClose();
-  };
+  // 🔑 BUSINESS DATA
+  customerName,
+  phone,
+  address,
+  complaint,
+  technicianId,
+  serviceCategory,
+  preferredTime,
+  adminNotes,
+
+  productDetails: {
+    make: 'Glen',
+    segment: '',
+    category: serviceCategory,
+    subCategory: '',
+    product: '',
+  },
+
+  symptoms: [],
+};
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
