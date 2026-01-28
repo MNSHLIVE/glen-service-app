@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Ticket } from '../types';
 import { SERVICE_CATEGORIES } from '../data/productData';
+import { TicketStatus } from '../types';
 
 interface AddTicketModalProps {
   onClose: () => void;
-  initialData?: Partial<Ticket> | null;
+  initialData?: any;
 }
 
 const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData }) => {
@@ -36,43 +36,35 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!customerName || !phone || !address || !complaint || !technicianId || !serviceCategory) {
-      alert('Please fill all fields');
-      return;
-    }
-
-    // ✅ Generate ticket ID
     const ticket_id = 'TKT-' + Date.now();
 
-const newTicketData = {
-  // 🔑 REQUIRED BY UI
-  id: ticket_id,
-  ticket_id: ticket_id,
-  status: TicketStatus.New,
-  serviceBookingDate: new Date().toISOString(),
-  isEscalated: false,
+    const newTicketData = {
+      id: ticket_id,
+      ticket_id,
+      status: TicketStatus.New,
+      serviceBookingDate: new Date().toISOString(),
+      isEscalated: false,
+      customerName,
+      phone,
+      address,
+      complaint,
+      technicianId,
+      serviceCategory,
+      preferredTime,
+      adminNotes,
+      productDetails: {
+        make: 'Glen',
+        segment: '',
+        category: serviceCategory,
+        subCategory: '',
+        product: '',
+      },
+      symptoms: [],
+    };
 
-  // 🔑 BUSINESS DATA
-  customerName,
-  phone,
-  address,
-  complaint,
-  technicianId,
-  serviceCategory,
-  preferredTime,
-  adminNotes,
-
-  productDetails: {
-    make: 'Glen',
-    segment: '',
-    category: serviceCategory,
-    subCategory: '',
-    product: '',
-  },
-
-  symptoms: [],
-};
-
+    addTicket(newTicketData);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -86,65 +78,29 @@ const newTicketData = {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Customer Name</label>
-              <input value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full border rounded px-3 py-2" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full border rounded px-3 py-2" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Address</label>
-              <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full border rounded px-3 py-2" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Service Category</label>
-              <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} className="w-full border rounded px-3 py-2">
-                <option value="">Select Category</option>
-                {SERVICE_CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Complaint</label>
-              <input value={complaint} onChange={e => setComplaint(e.target.value)} className="w-full border rounded px-3 py-2" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Preferred Time</label>
-              <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} className="w-full border rounded px-3 py-2">
-                <option>10AM-12PM</option>
-                <option>12PM-03PM</option>
-                <option>03PM-06PM</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Assign Technician</label>
-              <select value={technicianId} onChange={e => setTechnicianId(e.target.value)} className="w-full border rounded px-3 py-2">
-                {technicians.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-red-600">Admin Notes</label>
-              <input value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full border rounded px-3 py-2 bg-red-50" />
-            </div>
+            <input placeholder="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <textarea placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} className="w-full border rounded px-3 py-2">
+              <option value="">Select Category</option>
+              {SERVICE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <input placeholder="Complaint" value={complaint} onChange={e => setComplaint(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} className="w-full border rounded px-3 py-2">
+              <option>10AM-12PM</option>
+              <option>12PM-03PM</option>
+              <option>03PM-06PM</option>
+            </select>
+            <select value={technicianId} onChange={e => setTechnicianId(e.target.value)} className="w-full border rounded px-3 py-2">
+              {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <input placeholder="Admin Notes" value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full border rounded px-3 py-2 bg-red-50" />
 
             <div className="flex justify-end gap-3 pt-4">
               <button type="button" onClick={onClose} className="bg-gray-200 px-6 py-2 rounded">Cancel</button>
               <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded">Create Ticket</button>
             </div>
           </form>
-
         </div>
       </div>
     </div>
