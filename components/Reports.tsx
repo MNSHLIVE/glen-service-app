@@ -21,6 +21,10 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
             onClose();
         }, 1500);
     };
+         const assignedTechnician = technicians.find(
+  t => t.id === ticket?.technicianId
+);
+console.log('TICKET DETAILS DEBUG:', ticket);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -262,28 +266,56 @@ const AdminTicketDetails: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-            <DetailSection title="Customer & Job Info">
-                <DetailItem label="Customer" value={ticket.customerName} />
-                <DetailItem label="Phone" value={ticket.phone} />
-                <DetailItem label="Address" value={ticket.address} />
-                <DetailItem label="Booking Date" value={new Date(ticket.serviceBookingDate).toLocaleString()} />
-                <DetailItem label="Preferred Time" value={ticket.preferredTime} />
-                <DetailItem label="Complaint" value={ticket.complaint} />
-                <DetailItem label="Assigned To" value={assignedTechnician?.name} />
-            </DetailSection>
+  <DetailSection title="Customer & Job Info">
+    <DetailItem label="Customer" value={ticket.customerName || 'N/A'} />
+    <DetailItem label="Phone" value={ticket.phone || 'N/A'} />
+    <DetailItem label="Address" value={ticket.address || 'N/A'} />
 
-            {ticket.status === TicketStatus.Completed && (
-                 <DetailSection title="Completion Summary">
-                    <DetailItem label="Completed At" value={ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A'} />
-                    <DetailItem label="Work Done" value={ticket.workDone} />
-                    <DetailItem label="Payment Mode" value={ticket.paymentStatus} />
-                    <DetailItem label="Amount Paid">
-                        <span className="font-bold text-glen-blue">₹{ticket.amountCollected?.toFixed(2) || '0.00'}</span>
-                    </DetailItem>
-                    <DetailItem label="AMC Discussed" value={ticket.serviceChecklist?.amcDiscussion} />
-                    <DetailItem label="Free Service" value={ticket.freeService} />
-                </DetailSection>
-            )}
+    <DetailItem
+      label="Booking Date"
+      value={
+        ticket.serviceBookingDate
+          ? new Date(ticket.serviceBookingDate).toLocaleString()
+          : 'N/A'
+      }
+    />
+
+    <DetailItem
+      label="Preferred Time"
+      value={ticket.preferredTime || 'N/A'}
+    />
+
+    <DetailItem label="Complaint" value={ticket.complaint || 'N/A'} />
+
+    <DetailItem
+      label="Assigned To"
+      value={assignedTechnician?.name || 'Unassigned'}
+    />
+  </DetailSection>
+
+  {ticket.status === TicketStatus.Completed && (
+    <DetailSection title="Completion Summary">
+      <DetailItem
+        label="Completed At"
+        value={
+          ticket.completedAt
+            ? new Date(ticket.completedAt).toLocaleString()
+            : 'N/A'
+        }
+      />
+      <DetailItem label="Work Done" value={ticket.workDone || 'N/A'} />
+      <DetailItem label="Payment Mode" value={ticket.paymentStatus || 'N/A'} />
+      <DetailItem label="Amount Paid">
+        <span className="font-bold text-glen-blue">
+          ₹{ticket.amountCollected?.toFixed(2) || '0.00'}
+        </span>
+      </DetailItem>
+      <DetailItem label="AMC Discussed" value={ticket.serviceChecklist?.amcDiscussion || 'N/A'} />
+      <DetailItem label="Free Service" value={ticket.freeService || 'N/A'} />
+    </DetailSection>
+  )}
+</div>
+
 
             {ticket.partsReplaced && ticket.partsReplaced.length > 0 && (
                  <DetailSection title="Parts Replaced">
