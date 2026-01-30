@@ -78,18 +78,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   /* -------- READ TECHNICIANS -------- */
   const loadTechnicians = async () => {
-  const res = await fetch('/api/n8n-proxy?action=read-technician');
-  const data = await res.json();
+    const res = await fetch('/api/n8n-proxy?action=read-technician');
+    const data = await res.json();
 
-  if (!Array.isArray(data)) return;
+    if (!Array.isArray(data)) return;
 
-  const clean = data
-    .map(normalizeTechnicianFromSheet)
-    .filter(Boolean);
+    const clean = data
+      .map(normalizeTechnicianFromSheet)
+      .filter(Boolean);
 
-  setTechnicians(clean);
-};
-
+    setTechnicians(clean);
+  };
 
   /* -------- READ TICKETS -------- */
   const loadTickets = async () => {
@@ -102,7 +101,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .map(normalizeTicketFromSheet)
       .filter(Boolean);
 
-    setTickets(clean);
+    // ✅ FIX: newest tickets on TOP
+    setTickets(
+      clean.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      )
+    );
   };
 
   /* -------- INIT -------- */
@@ -138,44 +142,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       body: JSON.stringify({ function: 'NEW_TICKET', ticket }),
     });
 
+    // reload tickets after insert
     setTimeout(loadTickets, 1500);
   };
 
   const addTechnician = async (tech: any) => {
-  const technicianId = `TECH-${Date.now()}`;
+    const technicianId = `TECH-${Date.now()}`;
 
-  const payload = {
-    function: 'ADD_TECHNICIAN',
+    const payload = {
+      function: 'ADD_TECHNICIAN',
 
-    // 🔑 PRIMARY KEYS (ABSOLUTE MUST)
-    technician_id: technicianId,
-    technician_name: tech.technician_name || tech.name,
+      technician_id: technicianId,
+      technician_name: tech.technician_name || tech.name,
 
-    // OPTIONAL BUT STRUCTURED
-    pin: tech.pin || '',
-    phone: tech.phone || '',
-    role: tech.role || 'Technician',
-    vehicleNumber: tech.vehicleNumber || '',
-    points: 0,
-    status: 'ACTIVE',
+      pin: tech.pin || '',
+      phone: tech.phone || '',
+      role: tech.role || 'Technician',
+      vehicleNumber: tech.vehicleNumber || '',
+      points: 0,
+      status: 'ACTIVE',
 
-    created_at: new Date().toISOString(),
-    deleted_at: '',
-    app_version: 'v4.6.3',
-    last_seen: '',
+      created_at: new Date().toISOString(),
+      deleted_at: '',
+      app_version: 'v4.6.3',
+      last_seen: '',
+    };
+
+    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    alert('✅ Technician added successfully');
+
+    setTimeout(loadTechnicians, 1500);
   };
-
-  await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  alert('✅ Technician added successfully');
-
-  setTimeout(loadTechnicians, 1500);
-};
-
 
   return (
     <AppContext.Provider
