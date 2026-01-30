@@ -6,7 +6,9 @@ import React, {
   ReactNode,
 } from 'react';
 import { TicketStatus, User } from '../types';
-import { APP_CONFIG, APP_VERSION } from '../config';
+import { APP_CONFIG } from '../config';
+
+/* ================= CONTEXT TYPE ================= */
 
 interface AppContextType {
   user: User | null;
@@ -17,20 +19,21 @@ interface AppContextType {
   logout: () => void;
   addTicket: (t: any) => Promise<void>;
   addTechnician: (t: any) => Promise<void>;
+  deleteTechnician: (technicianId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* ---------------- NORMALIZERS ---------------- */
+/* ================= NORMALIZERS ================= */
 
 function normalizeTechnicianFromSheet(row: any) {
   if (!row) return null;
 
   const id = String(row.technician_id || '').trim();
   const name = String(row.technician_name || '').trim();
-  const pin = row.pin;
+  const pin = String(row.pin || '').trim();
 
-  if (!id || !name) return null;
+  if (!id || !name || !pin) return null;
 
   return {
     id,
@@ -53,22 +56,25 @@ function normalizeTicketFromSheet(row: any) {
   if (!id || !customerName || !complaint) return null;
 
   let status = TicketStatus.New;
-  const raw = String(row.status || '').toLowerCase();
-  if (raw.includes('progress')) status = TicketStatus.InProgress;
-  if (raw.includes('complete')) status = TicketStatus.Completed;
+  const rawStatus = String(row.status || '').toLowerCase();
+  if (rawStatus.includes('progress')) status = TicketStatus.InProgress;
+  if (rawStatus.includes('complete')) status = TicketStatus.Completed;
 
   return {
     id,
     customerName,
     complaint,
     phone: row.phone || '',
+    address: row.address || '',
+    preferredTime: row.preferred_time || '',
+    serviceBookingDate: row.service_booking_date || '',
     status,
     technicianId: row.technician_id || '',
-    createdAt: new Date(row.created_at || Date.now()),
+    createdAt: row.created_at ? new Date(row.created_at) : new Date(0),
   };
 }
 
-/* ---------------- PROVIDER ---------------- */
+/* ================= PROVIDER ================= */
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -76,11 +82,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
 
-  /* -------- READ TECHNICIANS -------- */
+  /* -------- LOAD TECHNICIANS -------- */
   const loadTechnicians = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-technician');
     const data = await res.json();
-
     if (!Array.isArray(data)) return;
 
     const clean = data
@@ -90,23 +95,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTechnicians(clean);
   };
 
-  /* -------- READ TICKETS -------- */
+  /* -------- LOAD TICKETS -------- */
   const loadTickets = async () => {
     const res = await fetch('/api/n8n-proxy?action=read-complaint');
     const data = await res.json();
-
     if (!Array.isArray(data)) return;
 
     const clean = data
       .map(normalizeTicketFromSheet)
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-    // ✅ FIX: newest tickets on TOP
-    setTickets(
-      clean.sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-      )
-    );
+    setTickets(clean);
   };
 
   /* -------- INIT -------- */
@@ -142,7 +142,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       body: JSON.stringify({ function: 'NEW_TICKET', ticket }),
     });
 
-    // reload tickets after insert
     setTimeout(loadTickets, 1500);
   };
 
@@ -151,17 +150,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const payload = {
       function: 'ADD_TECHNICIAN',
-
       technician_id: technicianId,
       technician_name: tech.technician_name || tech.name,
-
       pin: tech.pin || '',
       phone: tech.phone || '',
       role: tech.role || 'Technician',
       vehicleNumber: tech.vehicleNumber || '',
       points: 0,
       status: 'ACTIVE',
-
       created_at: new Date().toISOString(),
       deleted_at: '',
       app_version: 'v4.6.3',
@@ -174,7 +170,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       body: JSON.stringify(payload),
     });
 
-    alert('✅ Technician added successfully');
+    setTimeout(loadTechnicians, 1500);
+  };
+
+  const deleteTechnician = async (technicianId: string) => {
+    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'DELETE_TECHNICIAN',
+        technicianId,
+      }),
+    });
 
     setTimeout(loadTechnicians, 1500);
   };
@@ -190,12 +197,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         logout,
         addTicket,
         addTechnician,
+        deleteTechnician,
       }}
     >
       {children}
     </AppContext.Provider>
   );
 };
+
+/* ================= HOOK ================= */
 
 export const useAppContext = () => {
   const ctx = useContext(AppContext);
