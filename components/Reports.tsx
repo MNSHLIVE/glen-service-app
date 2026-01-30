@@ -2,26 +2,6 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { TicketStatus, UserRole } from '../types';
 
-/* ================= NORMALIZER ================= */
-const normalizeTicket = (row: any) => ({
-  ticketId: row.ticket_id ?? row.ticketId,
-  customerName: row.customer_name ?? row.customerName,
-  phone: row.phone,
-  address: row.address,
-  preferredTime: row.preferred_time ?? row.preferredTime,
-  complaint: row.complaint,
-  technicianId: row.technician_id ?? row.technicianId,
-  technicianName: row.technician_name,
-  status: row.status,
-  createdAt: row.created_at ?? row.createdAt,
-  serviceBookingDate: row.service_booking_date ?? row.serviceBookingDate,
-  completedAt: row.completed_at,
-  workDone: row.work_done,
-  paymentStatus: row.payment_status,
-  amountCollected: row.amount_collected,
-  partsReplaced: row.parts_replaced,
-});
-
 /* ================= PROPS ================= */
 interface ReportsProps {
   ticketId: string;
@@ -48,14 +28,8 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
   const { tickets, technicians, user } = useAppContext();
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
- // ✅ FINAL FIX: use canonical ticket.id
-const rawTicket = tickets.find(
-  (t: any) => t.id === ticketId
-);
-
-
-
-  const ticket = rawTicket ? normalizeTicket(rawTicket) : null;
+  // ✅ SINGLE SOURCE OF TRUTH: context tickets
+  const ticket = tickets.find((t: any) => t.id === ticketId);
 
   const assignedTechnician = technicians.find(
     (t: any) => t.id === ticket?.technicianId
@@ -65,7 +39,10 @@ const rawTicket = tickets.find(
     return (
       <div className="bg-white p-6 rounded-lg shadow-md text-center">
         <p className="text-red-500 font-bold">Ticket not found</p>
-        <button onClick={onBack} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded">
+        <button
+          onClick={onBack}
+          className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
+        >
           ← Back
         </button>
       </div>
@@ -80,9 +57,10 @@ const rawTicket = tickets.find(
         <div>
           <h2 className="text-xl font-bold">{ticket.customerName}</h2>
           <p className="text-sm text-gray-500">{ticket.id}</p>
-
         </div>
-        <button onClick={onBack} className="text-blue-600 text-sm font-bold">← Back</button>
+        <button onClick={onBack} className="text-blue-600 text-sm font-bold">
+          ← Back
+        </button>
       </div>
 
       {/* CUSTOMER INFO */}
@@ -93,11 +71,16 @@ const rawTicket = tickets.find(
           <DetailItem label="Address" value={ticket.address} />
           <DetailItem
             label="Booking Date"
-            value={ticket.serviceBookingDate ? new Date(ticket.serviceBookingDate).toLocaleString() : 'N/A'}
+            value={ticket.serviceBookingDate
+              ? new Date(ticket.serviceBookingDate).toLocaleString()
+              : 'N/A'}
           />
           <DetailItem label="Preferred Time" value={ticket.preferredTime} />
           <DetailItem label="Complaint" value={ticket.complaint} />
-          <DetailItem label="Assigned To" value={assignedTechnician?.name || 'Unassigned'} />
+          <DetailItem
+            label="Assigned To"
+            value={assignedTechnician?.name || 'Unassigned'}
+          />
         </DetailSection>
 
         {/* COMPLETION SUMMARY */}
@@ -105,11 +88,16 @@ const rawTicket = tickets.find(
           <DetailSection title="Completion Summary">
             <DetailItem
               label="Completed At"
-              value={ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A'}
+              value={ticket.completedAt
+                ? new Date(ticket.completedAt).toLocaleString()
+                : 'N/A'}
             />
             <DetailItem label="Work Done" value={ticket.workDone} />
             <DetailItem label="Payment Mode" value={ticket.paymentStatus} />
-            <DetailItem label="Amount Paid" value={`₹${ticket.amountCollected || 0}`} />
+            <DetailItem
+              label="Amount Paid"
+              value={`₹${ticket.amountCollected || 0}`}
+            />
           </DetailSection>
         )}
       </div>
@@ -117,7 +105,9 @@ const rawTicket = tickets.find(
       {/* PARTS REPLACED */}
       {ticket.partsReplaced && ticket.partsReplaced.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">Parts Replaced</h3>
+          <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">
+            Parts Replaced
+          </h3>
           <div className="space-y-2">
             {ticket.partsReplaced.map((part: any, index: number) => (
               <div key={index} className="p-2 bg-gray-50 rounded text-sm">
@@ -132,15 +122,15 @@ const rawTicket = tickets.find(
       )}
 
       {/* RECEIPT */}
-      {ticket.status === TicketStatus.Completed && user?.role !== UserRole.Technician && (
-        <button
-          onClick={() => setIsReceiptModalOpen(true)}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold"
-        >
-          Generate Receipt
-        </button>
-      )}
-
+      {ticket.status === TicketStatus.Completed &&
+        user?.role !== UserRole.Technician && (
+          <button
+            onClick={() => setIsReceiptModalOpen(true)}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold"
+          >
+            Generate Receipt
+          </button>
+        )}
     </div>
   );
 };
