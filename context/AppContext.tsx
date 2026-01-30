@@ -33,7 +33,7 @@ function normalizeTechnicianFromSheet(row: any) {
   const name = String(row.technician_name || '').trim();
   const pin = String(row.pin || '').trim();
 
-  if (!id || !name || !pin) return null;
+  if (!id || !name) return null;
 
   return {
     id,
@@ -64,15 +64,12 @@ function normalizeTicketFromSheet(row: any) {
     id,
     customerName,
     complaint,
-
     phone: row.phone || '',
     address: row.address || '',
     preferredTime: row.preferred_time || '',
     serviceBookingDate: row.service_booking_date || '',
-
     technicianId: row.technician_id || '',
     technicianName: row.technician_name || '',
-
     status,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(0),
   };
@@ -152,26 +149,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addTechnician = async (tech: any) => {
     const technicianId = `TECH-${Date.now()}`;
 
-    const payload = {
-      function: 'ADD_TECHNICIAN',
-      technician_id: technicianId,
-      technician_name: tech.technician_name || tech.name,
-      pin: tech.pin || '',
-      phone: tech.phone || '',
-      role: tech.role || 'Technician',
-      vehicleNumber: tech.vehicleNumber || '',
-      points: 0,
-      status: 'ACTIVE',
-      created_at: new Date().toISOString(),
-      deleted_at: '',
-      app_version: 'v4.6.3',
-      last_seen: '',
-    };
-
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        function: 'ADD_TECHNICIAN',
+        technician_id: technicianId,
+        technician_name: tech.technician_name || tech.name,
+        pin: tech.pin || '',
+        phone: tech.phone || '',
+        role: tech.role || 'Technician',
+        vehicleNumber: tech.vehicleNumber || '',
+        points: 0,
+        status: 'ACTIVE',
+        created_at: new Date().toISOString(),
+        deleted_at: '',
+        app_version: 'v4.6.3',
+        last_seen: '',
+      }),
     });
 
     setTimeout(loadTechnicians, 1500);
