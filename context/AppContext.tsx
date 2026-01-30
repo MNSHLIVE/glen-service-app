@@ -64,12 +64,16 @@ function normalizeTicketFromSheet(row: any) {
     id,
     customerName,
     complaint,
+
     phone: row.phone || '',
     address: row.address || '',
     preferredTime: row.preferred_time || '',
     serviceBookingDate: row.service_booking_date || '',
-    status,
+
     technicianId: row.technician_id || '',
+    technicianName: row.technician_name || '',
+
+    status,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(0),
   };
 }
