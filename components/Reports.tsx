@@ -48,10 +48,10 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
   const { tickets, technicians, user } = useAppContext();
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
-  // 🔴 FIX: find by ticket_id OR ticketId, then normalize
-  const rawTicket = tickets.find(
-    (t: any) => t.ticket_id === ticketId || t.ticketId === ticketId
-  );
+  // const rawTicket = tickets.find(
+  (t: any) => t.id === ticketId
+);
+
 
   const ticket = rawTicket ? normalizeTicket(rawTicket) : null;
 
@@ -77,7 +77,8 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
       <div className="bg-white p-4 rounded-lg shadow flex justify-between items-start">
         <div>
           <h2 className="text-xl font-bold">{ticket.customerName}</h2>
-          <p className="text-sm text-gray-500">{ticket.ticketId}</p>
+          <p className="text-sm text-gray-500">{ticket.id}</p>
+
         </div>
         <button onClick={onBack} className="text-blue-600 text-sm font-bold">← Back</button>
       </div>
