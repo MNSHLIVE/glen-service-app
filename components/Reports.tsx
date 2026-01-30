@@ -2,6 +2,26 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { TicketStatus, UserRole } from '../types';
 
+/* ================= NORMALIZER ================= */
+const normalizeTicket = (row: any) => ({
+  ticketId: row.ticket_id ?? row.ticketId,
+  customerName: row.customer_name ?? row.customerName,
+  phone: row.phone,
+  address: row.address,
+  preferredTime: row.preferred_time ?? row.preferredTime,
+  complaint: row.complaint,
+  technicianId: row.technician_id ?? row.technicianId,
+  technicianName: row.technician_name,
+  status: row.status,
+  createdAt: row.created_at ?? row.createdAt,
+  serviceBookingDate: row.service_booking_date ?? row.serviceBookingDate,
+  completedAt: row.completed_at,
+  workDone: row.work_done,
+  paymentStatus: row.payment_status,
+  amountCollected: row.amount_collected,
+  partsReplaced: row.parts_replaced,
+});
+
 /* ================= PROPS ================= */
 interface ReportsProps {
   ticketId: string;
@@ -28,8 +48,16 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
   const { tickets, technicians, user } = useAppContext();
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
-  const ticket = tickets.find(t => t.id === ticketId);
-  const assignedTechnician = technicians.find(t => t.id === ticket?.technicianId);
+  // 🔴 FIX: find by ticket_id OR ticketId, then normalize
+  const rawTicket = tickets.find(
+    (t: any) => t.ticket_id === ticketId || t.ticketId === ticketId
+  );
+
+  const ticket = rawTicket ? normalizeTicket(rawTicket) : null;
+
+  const assignedTechnician = technicians.find(
+    (t: any) => t.id === ticket?.technicianId
+  );
 
   if (!ticket) {
     return (
@@ -49,7 +77,7 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
       <div className="bg-white p-4 rounded-lg shadow flex justify-between items-start">
         <div>
           <h2 className="text-xl font-bold">{ticket.customerName}</h2>
-          <p className="text-sm text-gray-500">{ticket.id}</p>
+          <p className="text-sm text-gray-500">{ticket.ticketId}</p>
         </div>
         <button onClick={onBack} className="text-blue-600 text-sm font-bold">← Back</button>
       </div>
@@ -88,7 +116,7 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">Parts Replaced</h3>
           <div className="space-y-2">
-            {ticket.partsReplaced.map((part, index) => (
+            {ticket.partsReplaced.map((part: any, index: number) => (
               <div key={index} className="p-2 bg-gray-50 rounded text-sm">
                 <p className="font-semibold">{part.name}</p>
                 <p className="text-xs text-gray-600">
