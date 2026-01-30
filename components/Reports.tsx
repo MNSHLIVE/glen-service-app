@@ -48,9 +48,13 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
   const { tickets, technicians, user } = useAppContext();
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
-  // const rawTicket = tickets.find(
+ const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+// ✅ FINAL FIX: use canonical ticket.id
+const rawTicket = tickets.find(
   (t: any) => t.id === ticketId
 );
+
 
 
   const ticket = rawTicket ? normalizeTicket(rawTicket) : null;
