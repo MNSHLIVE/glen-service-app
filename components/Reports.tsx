@@ -9,14 +9,20 @@ interface ReportsProps {
 }
 
 /* ================= HELPERS ================= */
-const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({
+  title,
+  children,
+}) => (
   <div>
     <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">{title}</h3>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>
   </div>
 );
 
-const DetailItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
+const DetailItem: React.FC<{ label: string; value?: React.ReactNode }> = ({
+  label,
+  value,
+}) => (
   <div>
     <p className="text-xs text-gray-500">{label}</p>
     <p className="font-semibold text-gray-800">{value || 'N/A'}</p>
@@ -25,15 +31,11 @@ const DetailItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ labe
 
 /* ================= MAIN ================= */
 const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
-  const { tickets, technicians, user } = useAppContext();
+  const { tickets, user } = useAppContext();
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
-  // ✅ SINGLE SOURCE OF TRUTH: context tickets
+  // ✅ SINGLE SOURCE OF TRUTH
   const ticket = tickets.find((t: any) => t.id === ticketId);
-
-  const assignedTechnician = technicians.find(
-    (t: any) => t.id === ticket?.technicianId
-  );
 
   if (!ticket) {
     return (
@@ -49,16 +51,22 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
     );
   }
 
+  // ✅ ASSIGNED TECHNICIAN (FINAL & CORRECT)
+  const assignedTechnicianName =
+    ticket.technicianName || 'Unassigned';
+
   return (
     <div className="space-y-6">
-
       {/* HEADER */}
       <div className="bg-white p-4 rounded-lg shadow flex justify-between items-start">
         <div>
           <h2 className="text-xl font-bold">{ticket.customerName}</h2>
           <p className="text-sm text-gray-500">{ticket.id}</p>
         </div>
-        <button onClick={onBack} className="text-blue-600 text-sm font-bold">
+        <button
+          onClick={onBack}
+          className="text-blue-600 text-sm font-bold"
+        >
           ← Back
         </button>
       </div>
@@ -71,16 +79,15 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
           <DetailItem label="Address" value={ticket.address} />
           <DetailItem
             label="Booking Date"
-            value={ticket.serviceBookingDate
-              ? new Date(ticket.serviceBookingDate).toLocaleString()
-              : 'N/A'}
+            value={
+              ticket.serviceBookingDate
+                ? new Date(ticket.serviceBookingDate).toLocaleString()
+                : 'N/A'
+            }
           />
           <DetailItem label="Preferred Time" value={ticket.preferredTime} />
           <DetailItem label="Complaint" value={ticket.complaint} />
-          <DetailItem
-            label="Assigned To"
-            value={assignedTechnician?.name || 'Unassigned'}
-          />
+          <DetailItem label="Assigned To" value={assignedTechnicianName} />
         </DetailSection>
 
         {/* COMPLETION SUMMARY */}
@@ -88,9 +95,11 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
           <DetailSection title="Completion Summary">
             <DetailItem
               label="Completed At"
-              value={ticket.completedAt
-                ? new Date(ticket.completedAt).toLocaleString()
-                : 'N/A'}
+              value={
+                ticket.completedAt
+                  ? new Date(ticket.completedAt).toLocaleString()
+                  : 'N/A'
+              }
             />
             <DetailItem label="Work Done" value={ticket.workDone} />
             <DetailItem label="Payment Mode" value={ticket.paymentStatus} />
@@ -110,7 +119,10 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
           </h3>
           <div className="space-y-2">
             {ticket.partsReplaced.map((part: any, index: number) => (
-              <div key={index} className="p-2 bg-gray-50 rounded text-sm">
+              <div
+                key={index}
+                className="p-2 bg-gray-50 rounded text-sm"
+              >
                 <p className="font-semibold">{part.name}</p>
                 <p className="text-xs text-gray-600">
                   Price: ₹{part.price} | Warranty: {part.warrantyDuration}
