@@ -128,21 +128,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addTechnician = async (tech: any) => {
-    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ADD_TECHNICIAN',
-        technician_id: `TECH-${Date.now()}`,
-        technician_name: tech.name,
-        pin: tech.pin,
-        phone: tech.phone || '',
-        status: 'ACTIVE',
-        created_at: new Date().toISOString(),
-      }),
-    });
-    setTimeout(loadTechnicians, 1500);
-  };
+  await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      function: 'ADD_TECHNICIAN',
+      technician_id: `TECH-${Date.now()}`,
+      technician_name: String(tech.name || ''),
+      pin: String(tech.pin || ''),   // 🔑 FIXED LINE
+      phone: String(tech.phone || ''),
+      status: 'ACTIVE',
+      created_at: new Date().toISOString(),
+    }),
+  });
+
+  setTimeout(loadTechnicians, 1500);
+};
+
 
   const deleteTechnician = async (technicianId: string) => {
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
