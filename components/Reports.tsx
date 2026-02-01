@@ -36,6 +36,7 @@ const Reports: React.FC<ReportsProps> = ({ ticketId, onBack }) => {
 
   // ✅ SINGLE SOURCE OF TRUTH
   const ticket = tickets.find((t: any) => t.id === ticketId);
+console.log('FULL TICKET OBJECT:', ticket);
 
   if (!ticket) {
     return (
