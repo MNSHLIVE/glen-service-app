@@ -135,8 +135,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       function: 'ADD_TECHNICIAN',
       technician_id: `TECH-${Date.now()}`,
       technician_name: String(tech.name || ''),
-      pin: String(tech.pin || ''),   // 🔑 FIXED LINE
-      phone: String(tech.phone || ''),
+      pin: tech.pin,   // 🔑 FIXED LINE
+            phone: String(tech.phone || ''),
       status: 'ACTIVE',
       created_at: new Date().toISOString(),
     }),
