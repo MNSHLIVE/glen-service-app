@@ -60,7 +60,7 @@ const TechnicianView: React.FC = () => {
               <button
                 className="bg-blue-600 text-white px-3 py-1"
                 onClick={async () => {
-                  console.log('FORM BEFORE SEND 👉', form);   // 🔴 STEP 2 IS HERE
+                  console.log("🧠 FINAL FORM DATA:", form);
                   await addTechnician(form);
                   setOpen(false);
                 }}

@@ -156,10 +156,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       created_at: new Date().toISOString(),
     };
 
-    console.log('📤 Payload being sent to webhook:', payload);
-
-    // 🔔 FORCE ALERT FOR TESTING
-    alert(`DEBUG: Sending Tech Data\nName: ${payload.technician_name}\nPIN: ${payload.pin}`);
+    console.log('📤 Payload being sent:', payload);
 
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
