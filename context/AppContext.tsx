@@ -162,12 +162,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     console.log('📤 Adding technician with data:', tech);
 
     const payload = {
-      function: 'ADD_TECHNICIAN',
+      function: "ADD_TECHNICIAN",
       technician_id: `TECH-${Date.now()}`,
-      technician_name: String(tech.name || ''),
-      pin: String(tech.pin || ''),  // 🔑 FIX: Convert to string to prevent removal
-      phone: String(tech.phone || ''),
-      status: 'ACTIVE',
+      technician_name: String(tech.name || '').trim(),
+      pin: String(tech.pin || '').trim() || "1234",     // ✅ FINAL FIX: Never empty
+      phone: String(tech.phone || '').trim(),
+      status: "ACTIVE",
       created_at: new Date().toISOString(),
     };
 
