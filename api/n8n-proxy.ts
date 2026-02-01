@@ -43,7 +43,7 @@ async function handleWebhook(req: any, res: any) {
   try {
     const webhookUrl = `${N8N_BASE_URL}${WEBHOOK_SUBMIT_PATH}`;
     console.log('Submitting to webhook:', webhookUrl);
-    
+
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,27 +67,51 @@ async function handleRead(req: any, res: any, readPath: string) {
   try {
     const readUrl = `${N8N_BASE_URL}${readPath}`;
     console.log('Reading from webhook:', readUrl);
-    
+
     const response = await fetch(readUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
 
-    const data = await response.json();
-    
+    // Handle non-200 responses
+    if (!response.ok) {
+      console.warn(`n8n returned status ${response.status}`);
+      // Return empty array instead of failing
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json([]);
+    }
+
+    // Safe JSON parsing
+    let data;
+    try {
+      const text = await response.text();
+      data = text ? JSON.parse(text) : [];
+    } catch (parseError) {
+      console.warn('Failed to parse n8n response, returning empty array:', parseError);
+      data = [];
+    }
+
+    // Ensure data is an array
+    if (!Array.isArray(data)) {
+      console.warn('n8n returned non-array data, wrapping or converting to empty array');
+      data = [];
+    }
+
     // Return the data with CORS headers for multi-user access
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store'); // No caching for live data
-    
+
     res.status(200).json(data);
   } catch (error) {
     console.error('Error reading data:', error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to read data from n8n",
-      error: error
-    });
+    // Return empty array instead of 500 to prevent UI crash
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json([]);
   }
 }

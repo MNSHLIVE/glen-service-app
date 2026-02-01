@@ -18,7 +18,7 @@ async function handleWebhook(body) {
   try {
     const webhookUrl = `${N8N_BASE_URL}${WEBHOOK_SUBMIT_PATH}`;
     console.log('📤 Submitting to webhook:', webhookUrl);
-    
+
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,18 +38,36 @@ async function handleRead(readPath) {
   try {
     const readUrl = `${N8N_BASE_URL}${readPath}`;
     console.log('📥 Reading from webhook:', readUrl);
-    
+
     const response = await fetch(readUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
 
-    const data = await response.json();
+    // Get text first to handle empty responses
+    const text = await response.text();
+
+    // If empty response, return empty array
+    if (!text || text.trim() === '') {
+      console.warn('⚠️ Empty response from n8n, returning empty array');
+      return { status: 200, data: [] };
+    }
+
+    // Try to parse JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError.message);
+      console.error('Response text:', text);
+      return { status: 200, data: [] };
+    }
+
     console.log('✅ Read response:', JSON.stringify(data).substring(0, 100));
     return { status: response.status, data };
   } catch (error) {
     console.error('❌ Read error:', error);
-    return { status: 500, data: { success: false, message: "Failed to read data from n8n", error: error.message } };
+    return { status: 200, data: [] }; // Return empty array instead of 500
   }
 }
 
@@ -59,7 +77,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
-  
+
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
@@ -82,7 +100,7 @@ const server = http.createServer(async (req, res) => {
       req.on('end', async () => {
         try {
           let result;
-          
+
           if (action === 'read-complaint') {
             result = await handleRead(WEBHOOK_READ_COMPLAINT);
           } else if (action === 'read-technician') {

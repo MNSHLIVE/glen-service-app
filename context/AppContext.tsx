@@ -75,13 +75,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAppLoading, setIsAppLoading] = useState(true);
 
   const loadTechnicians = async () => {
-    const res = await fetch('/api/n8n-proxy?action=read-technician');
-    const data = await res.json();
-    if (!Array.isArray(data)) return;
+    try {
+      console.log('🔄 Loading technicians from API...');
+      const res = await fetch('/api/n8n-proxy?action=read-technician');
+      console.log('📡 Response status:', res.status);
 
-    setTechnicians(
-      data.map(normalizeTechnicianFromSheet).filter(Boolean)
-    );
+      const data = await res.json();
+      console.log('📊 Raw technician data:', data);
+
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ Technician data is not an array:', typeof data, data);
+        console.error('❌ Full error object:', JSON.stringify(data, null, 2));
+        setTechnicians([]);
+        return;
+      }
+
+      const normalized = data.map(normalizeTechnicianFromSheet).filter(Boolean);
+      console.log('✅ Normalized technicians:', normalized);
+
+      setTechnicians(normalized);
+    } catch (error) {
+      console.error('❌ Failed to load technicians:', error);
+      setTechnicians([]);
+    }
   };
 
   const loadTickets = async () => {
@@ -128,22 +144,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addTechnician = async (tech: any) => {
-  await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    console.log('📤 Adding technician with data:', tech);
+
+    const payload = {
       function: 'ADD_TECHNICIAN',
       technician_id: `TECH-${Date.now()}`,
       technician_name: String(tech.name || ''),
-      pin: tech.pin,   // 🔑 FIXED LINE
-            phone: String(tech.phone || ''),
+      pin: String(tech.pin || ''),  // 🔑 FIX: Convert to string to prevent removal
+      phone: String(tech.phone || ''),
       status: 'ACTIVE',
       created_at: new Date().toISOString(),
-    }),
-  });
+    };
 
-  setTimeout(loadTechnicians, 1500);
-};
+    console.log('📤 Payload being sent to webhook:', payload);
+
+    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    setTimeout(loadTechnicians, 1500);
+  };
 
 
   const deleteTechnician = async (technicianId: string) => {

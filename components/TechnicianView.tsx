@@ -41,24 +41,28 @@ const TechnicianView: React.FC = () => {
             <input
               className="border p-2 w-full"
               placeholder="Name"
+              value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
             />
             <input
               className="border p-2 w-full"
               placeholder="PIN"
+              value={form.pin}
               onChange={e => setForm({ ...form, pin: e.target.value })}
             />
             <div className="flex justify-end gap-2">
-              <button onClick={() => setOpen(false)}>Cancel</button>
               <button
-                className="bg-blue-600 text-white px-3 py-1"
-                onClick={async () => {
-                  await addTechnician(form);
-                  setOpen(false);
-                }}
-              >
-                Save
-              </button>
+  className="bg-blue-600 text-white px-3 py-1"
+  onClick={async () => {
+    console.log('FORM DATA BEFORE SEND:', form);
+    await addTechnician(form);
+    setForm({ name: '', pin: '' }); // Reset form
+    setOpen(false);
+  }}
+>
+  Save
+</button>
+
             </div>
           </div>
         </div>

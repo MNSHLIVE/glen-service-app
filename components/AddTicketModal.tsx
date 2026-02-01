@@ -92,6 +92,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
               <option>03PM-06PM</option>
             </select>
             <select value={technicianId} onChange={e => setTechnicianId(e.target.value)} className="w-full border rounded px-3 py-2">
+              {technicians.length === 0 && <option value="">⚠️ No technicians available</option>}
               {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <input placeholder="Admin Notes" value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full border rounded px-3 py-2 bg-red-50" />
