@@ -76,26 +76,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadTechnicians = async () => {
     try {
-      console.log('🔄 Loading technicians from API...');
+      console.log("🔄 Loading technicians from API...");
       const res = await fetch('/api/n8n-proxy?action=read-technician');
-      console.log('📡 Response status:', res.status);
-
       const data = await res.json();
-      console.log('📊 Raw technician data:', data);
 
-      if (!Array.isArray(data)) {
-        console.warn('⚠️ Technician data is not an array:', typeof data, data);
-        console.error('❌ Full error object:', JSON.stringify(data, null, 2));
-        setTechnicians([]);
-        return;
+      console.log("📡 Response status:", res.status);
+      console.log("📊 Raw technician data:", data);
+
+      // ✅ FORCE ARRAY EXTRACTION (handles n8n, sheets, set nodes, everything)
+      let rawList: any[] = [];
+      if (Array.isArray(data)) {
+        rawList = data;
+      } else if (Array.isArray(data?.data)) {
+        rawList = data.data;
+      } else if (Array.isArray(data?.items)) {
+        rawList = data.items;
+      } else if (data && typeof data === "object") {
+        rawList = Object.values(data).filter(v => typeof v === "object");
       }
 
-      const normalized = data.map(normalizeTechnicianFromSheet).filter(Boolean);
-      console.log('✅ Normalized technicians:', normalized);
+      console.log("✅ Normalized technicians:", rawList);
 
-      setTechnicians(normalized);
-    } catch (error) {
-      console.error('❌ Failed to load technicians:', error);
+      setTechnicians(
+        rawList.map((t) => ({
+          id: String(t.technician_id || t.id || '').trim(),
+          name: String(t.technician_name || t.name || '').trim(),
+          phone: t.phone || "",
+          pin: String(t.pin || '').trim(),
+          status: t.status || "ACTIVE",
+          role: t.role || 'Technician',
+          vehicleNumber: t.vehicleNumber || '',
+          created_at: t.created_at || "",
+        })).filter(t => t.id || t.name)
+      );
+    } catch (err) {
+      console.error("❌ Failed to load technicians:", err);
       setTechnicians([]);
     }
   };
