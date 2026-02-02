@@ -25,8 +25,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-/* ================= PROVIDER ================= */
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<any[]>([]);
@@ -41,59 +39,92 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadTechnicians = async () => {
     try {
-      console.log("🔄 Loading technicians...");
+      console.log("🔄 SYNC: Loading technicians...");
       const res = await fetch('/api/n8n-proxy?action=read-technician');
       const data = await res.json();
 
-      let rawList: any[] = Array.isArray(data) ? data : (data?.data || data?.items || []);
+      console.log("📊 SYNC: Raw Tech Data from Server:", data);
 
-      const normalized = rawList.map((t) => ({
-        id: String(t.technician_id || t.id || '').trim(),
-        name: String(t.technician_name || t.name || '').trim(),
-        phone: t.phone || "",
-        pin: String(t.pin || t.password || '').trim(),
-        status: t.status || "ACTIVE",
-        role: t.role || 'Technician',
-        points: Number(t.points || 0),
-        lastSeen: t.lastSeen || t.created_at || "",
-      })).filter(t => (t.id || t.name) && !pendingActions.current.deleted.has(t.id));
+      let rawList: any[] = [];
+      if (Array.isArray(data)) {
+        rawList = data;
+      } else if (data && typeof data === 'object') {
+        rawList = data.data || data.items || data.records || [];
+      }
 
+      const normalized = rawList.map((t, idx) => {
+        // RESILIENT FIELD MAPPING (Handles almost any Google Sheet column name)
+        const id = String(t.technician_id || t.id || t.StaffID || t.staff_id || t.ID || '').trim();
+        const name = String(t.technician_name || t.name || t.Name || t.FullName || t.StaffName || '').trim();
+        const pin = String(t.pin || t.password || t.PIN || t.Password || t.Pass || '').trim();
+        const phone = String(t.phone || t.Phone || t.mobile || t.Mobile || '').trim();
+        const status = String(t.status || t.Status || t.Active || 'ACTIVE').toUpperCase();
+
+        if (!id && !name) {
+          console.warn(`⚠️ SYNC: Row ${idx} is missing both ID and Name:`, t);
+        }
+
+        return {
+          id: id || `TECH-ERR-${idx}`,
+          name: name || "Unnamed Technician",
+          phone,
+          pin: pin || "1234",
+          status,
+          role: t.role || t.Role || 'Technician',
+          points: Number(t.points || t.Points || 0),
+          lastSeen: t.lastSeen || t.last_seen || t.last_active || t.created_at || "",
+        };
+      }).filter(t => !pendingActions.current.deleted.has(t.id));
+
+      console.log("✅ SYNC: Normalized Technicians:", normalized);
       setTechnicians(normalized);
       localStorage.setItem('technicians', JSON.stringify(normalized));
     } catch (err) {
-      console.error("❌ Failed to load technicians:", err);
+      console.error("❌ SYNC: Failed to load technicians:", err);
     }
   };
 
   const loadTickets = async () => {
     try {
+      console.log("🔄 SYNC: Loading tickets/complaints...");
       const res = await fetch('/api/n8n-proxy?action=read-complaint');
       const data = await res.json();
-      if (!Array.isArray(data)) return;
 
-      const normalized = data.map(row => {
+      console.log("📊 SYNC: Raw Ticket Data from Server:", data);
+
+      let rawList: any[] = [];
+      if (Array.isArray(data)) {
+        rawList = data;
+      } else if (data && typeof data === 'object') {
+        rawList = data.data || data.items || data.records || [];
+      }
+
+      const normalized = rawList.map(row => {
         let status = TicketStatus.New;
-        const raw = String(row.status || '').toLowerCase();
-        if (raw.includes('progress')) status = TicketStatus.InProgress;
-        if (raw.includes('complete')) status = TicketStatus.Completed;
+        const rawStatus = String(row.status || row.Status || '').toLowerCase();
+        if (rawStatus.includes('progress') || rawStatus.includes('working')) status = TicketStatus.InProgress;
+        if (rawStatus.includes('complete') || rawStatus.includes('done')) status = TicketStatus.Completed;
+        if (rawStatus.includes('cancel')) status = TicketStatus.Cancelled;
 
         return {
-          id: String(row.ticket_id || row.id || '').trim(),
-          customerName: row.customer_name || row.customerName || '',
-          phone: row.phone || '',
-          address: row.address || '',
-          complaint: row.complaint || '',
-          technicianId: row.technician_id || row.technicianId || '',
-          technicianName: row.technician_name || row.technicianName || '',
+          id: String(row.ticket_id || row.id || row.TicketID || row.ID || '').trim(),
+          customerName: row.customer_name || row.customerName || row.CustomerName || row.Name || '',
+          phone: row.phone || row.Phone || row.Mobile || '',
+          address: row.address || row.Address || '',
+          complaint: row.complaint || row.Complaint || row.Issue || '',
+          technicianId: row.technician_id || row.technicianId || row.StaffID || row.TechID || '',
+          technicianName: row.technician_name || row.technicianName || row.StaffName || row.TechName || '',
           status,
-          createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+          createdAt: row.created_at || row.CreatedAt || row.Date ? new Date(row.created_at || row.CreatedAt || row.Date) : new Date(),
+          serviceCategory: row.service_category || row.Category || row.serviceCategory || '',
         };
       });
 
+      console.log("✅ SYNC: Normalized Tickets:", normalized);
       setTickets(normalized);
       localStorage.setItem('tickets', JSON.stringify(normalized));
     } catch (err) {
-      console.error("❌ Failed to load tickets:", err);
+      console.error("❌ SYNC: Failed to load tickets:", err);
     }
   };
 
@@ -132,38 +163,95 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addTicket = async (ticket: any) => {
-    console.log('📤 Sending New Ticket:', ticket);
+    const payload = {
+      action: 'NEW_TICKET',
+      function: 'NEW_TICKET',
+      ...ticket // FLAT payload for maximum compatibility
+    };
+
+    console.log('📤 WEBHOOK: Sending New Ticket (FLAT):', payload);
+
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'NEW_TICKET', // Restored 'action' for old n8n compatibility
-        function: 'NEW_TICKET', // Keeping 'function' for safety
-        ticket
-      }),
+      body: JSON.stringify(payload),
     });
-    setTimeout(syncTickets, 2000);
+    setTimeout(syncTickets, 3000);
   };
 
   const addTechnician = async (tech: any) => {
     const newId = `TECH-${Date.now()}`;
     pendingActions.current.added.add(newId);
 
+    // EXTREMELY ROBUST FLAT PAYLOAD
+    // We send every possible field name so n8n can easily map to any Google Sheet column
     const payload = {
       action: "ADD_TECHNICIAN",
       function: "ADD_TECHNICIAN",
-      technician: {
-        ...tech,
-        id: newId,
-        technician_id: newId,
-        technician_name: tech.name,
-        pin: tech.pin || tech.password || "1234",
-        status: "ACTIVE",
-        created_at: new Date().toISOString(),
-      }
+
+      id: newId,
+      technician_id: newId,
+      staff_id: newId,
+      ID: newId,
+
+      name: tech.name,
+      technician_name: tech.name,
+      staff_name: tech.name,
+      FullName: tech.name,
+      Name: tech.name,
+
+      pin: tech.pin || tech.password || "1234",
+      password: tech.pin || tech.password || "1234",
+      PIN: tech.pin || tech.password || "1234",
+      Password: tech.pin || tech.password || "1234",
+
+      phone: tech.phone || "",
+      Phone: tech.phone || "",
+      Mobile: tech.phone || "",
+
+      status: "ACTIVE",
+      Status: "ACTIVE",
+      role: tech.role || "Technician",
+      Role: tech.role || "Technician",
+      created_at: new Date().toISOString(),
+      CreatedAt: new Date().toISOString(),
+      Date: new Date().toISOString(),
     };
 
-    console.log('📤 Sending Add Technician:', payload);
+    console.log('📤 WEBHOOK: Sending Add Technician (FLAT):', payload);
+
+    try {
+      const res = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      console.log('✅ WEBHOOK: Response Status:', res.status);
+    } catch (err) {
+      console.error('❌ WEBHOOK: Failed to send Add Technician:', err);
+    }
+
+    setTimeout(() => {
+      pendingActions.current.added.delete(newId);
+      syncTickets();
+    }, 3000);
+  };
+
+  const deleteTechnician = async (technicianId: string) => {
+    pendingActions.current.deleted.add(technicianId);
+    setTechnicians(prev => prev.filter(t => t.id !== technicianId));
+
+    const payload = {
+      action: 'DELETE_TECHNICIAN',
+      function: 'DELETE_TECHNICIAN',
+      technicianId,
+      id: technicianId,
+      staff_id: technicianId,
+      technician_id: technicianId
+    };
+
+    console.log('📤 WEBHOOK: Sending Delete Technician:', payload);
+
     await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -171,30 +259,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     setTimeout(() => {
-      pendingActions.current.added.delete(newId);
-      syncTickets();
-    }, 2000);
-  };
-
-  const deleteTechnician = async (technicianId: string) => {
-    pendingActions.current.deleted.add(technicianId);
-    setTechnicians(prev => prev.filter(t => t.id !== technicianId));
-
-    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'DELETE_TECHNICIAN',
-        function: 'DELETE_TECHNICIAN',
-        technicianId,
-        id: technicianId
-      }),
-    });
-
-    setTimeout(() => {
       pendingActions.current.deleted.delete(technicianId);
       syncTickets();
-    }, 2000);
+    }, 3000);
   };
 
   return (
@@ -223,4 +290,3 @@ export const useAppContext = () => {
   if (!ctx) throw new Error('useAppContext missing');
   return ctx;
 };
-
