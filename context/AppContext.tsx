@@ -238,6 +238,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       alert("Failed to add technician: " + error.message);
       return;
     }
+
+    // Sync to n8n/Google Sheets
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'ADD_TECHNICIAN',
+        technician_id: newId,
+        technician_name: tech.name,
+        pin: tech.pin,
+        phone: tech.phone,
+        role: tech.role || 'Technician',
+        status: 'ACTIVE'
+      })
+    }).catch(() => { });
+
     await loadTechnicians();
   };
 
@@ -248,6 +264,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .eq('id', technicianId);
 
     if (error) throw error;
+
+    // Sync to n8n/Google Sheets
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'DELETE_TECHNICIAN',
+        technician_id: technicianId,
+        status: 'INACTIVE',
+        deleted_at: new Date().toISOString()
+      })
+    }).catch(() => { });
+
     await loadTechnicians();
   };
 
@@ -263,6 +292,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }]);
 
     if (error) throw error;
+
+    // Sync to n8n/Google Sheets
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'ATTENDANCE',
+        type: status === 'Clock In' ? 'IN' : 'OUT',
+        technician_id: user.id,
+        technician_name: user.name,
+        time: new Date().toISOString()
+      })
+    }).catch(() => { });
   };
 
   const sendHeartbeat = async () => {
