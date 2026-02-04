@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { TicketStatus, User } from '../types';
 import { APP_CONFIG } from '../config';
+import { supabase } from '../lib/supabase';
 
 interface AppContextType {
   user: User | null;
@@ -18,8 +19,11 @@ interface AppContextType {
   login: (u: User) => void;
   logout: () => void;
   addTicket: (t: any) => Promise<void>;
+  updateTicket: (t: any) => Promise<void>;
   addTechnician: (t: any) => Promise<void>;
   deleteTechnician: (technicianId: string) => Promise<void>;
+  markAttendance: (status: 'Clock In' | 'Clock Out') => Promise<void>;
+  sendHeartbeat: () => Promise<void>;
   syncTickets: () => Promise<void>;
 }
 
@@ -32,99 +36,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const pendingActions = useRef<{ added: Set<string>; deleted: Set<string> }>({
-    added: new Set(),
-    deleted: new Set(),
+  const normalizeTicket = (t: any) => ({
+    ...t,
+    customerName: t.customer_name,
+    serviceBookingDate: t.service_booking_date || t.created_at,
+    technicianId: t.technician_id,
+    technicianName: t.technician_name,
+    preferredTime: t.preferred_time,
+    serviceCategory: t.category,
+    amountCollected: t.amount_collected,
+    paymentStatus: t.payment_method,
+    workDone: t.work_done,
+    partsReplaced: t.parts_replaced,
+    serviceChecklist: t.service_checklist,
+    adminNotes: t.admin_notes,
+    isEscalated: t.is_escalated,
+    completedAt: t.completed_at
+  });
+
+  const normalizeTechnician = (tech: any) => ({
+    ...tech,
+    lastSeen: tech.last_seen,
+    pin: tech.pin || tech.password
   });
 
   const loadTechnicians = async () => {
     try {
-      console.log("🔄 SYNC: Loading technicians...");
-      const res = await fetch('/api/n8n-proxy?action=read-technician');
-      const data = await res.json();
+      const { data, error } = await supabase
+        .from('technicians')
+        .select('*')
+        .order('name');
 
-      console.log("📊 SYNC: Raw Tech Data from Server:", data);
-
-      let rawList: any[] = [];
-      if (Array.isArray(data)) {
-        rawList = data;
-      } else if (data && typeof data === 'object') {
-        rawList = data.data || data.items || data.records || [];
-      }
-
-      const normalized = rawList.map((t, idx) => {
-        // RESILIENT FIELD MAPPING (Handles almost any Google Sheet column name)
-        const id = String(t.technician_id || t.id || t.StaffID || t.staff_id || t.ID || '').trim();
-        const name = String(t.technician_name || t.name || t.Name || t.FullName || t.StaffName || '').trim();
-        const pin = String(t.pin || t.password || t.PIN || t.Password || t.Pass || '').trim();
-        const phone = String(t.phone || t.Phone || t.mobile || t.Mobile || '').trim();
-        const status = String(t.status || t.Status || t.Active || 'ACTIVE').toUpperCase();
-
-        if (!id && !name) {
-          console.warn(`⚠️ SYNC: Row ${idx} is missing both ID and Name:`, t);
-        }
-
-        return {
-          id: id || `TECH-ERR-${idx}`,
-          name: name || "Unnamed Technician",
-          phone,
-          pin: pin || "1234",
-          status,
-          role: t.role || t.Role || 'Technician',
-          points: Number(t.points || t.Points || 0),
-          lastSeen: t.lastSeen || t.last_seen || t.last_active || t.created_at || "",
-        };
-      }).filter(t => !pendingActions.current.deleted.has(t.id));
-
-      console.log("✅ SYNC: Normalized Technicians:", normalized);
+      if (error) throw error;
+      const normalized = (data || []).map(normalizeTechnician);
       setTechnicians(normalized);
       localStorage.setItem('technicians', JSON.stringify(normalized));
     } catch (err) {
-      console.error("❌ SYNC: Failed to load technicians:", err);
+      console.error("❌ Supabase: Failed to load technicians:", err);
     }
   };
 
   const loadTickets = async () => {
     try {
-      console.log("🔄 SYNC: Loading tickets/complaints...");
-      const res = await fetch('/api/n8n-proxy?action=read-complaint');
-      const data = await res.json();
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      console.log("📊 SYNC: Raw Ticket Data from Server:", data);
-
-      let rawList: any[] = [];
-      if (Array.isArray(data)) {
-        rawList = data;
-      } else if (data && typeof data === 'object') {
-        rawList = data.data || data.items || data.records || [];
-      }
-
-      const normalized = rawList.map(row => {
-        let status = TicketStatus.New;
-        const rawStatus = String(row.status || row.Status || '').toLowerCase();
-        if (rawStatus.includes('progress') || rawStatus.includes('working')) status = TicketStatus.InProgress;
-        if (rawStatus.includes('complete') || rawStatus.includes('done')) status = TicketStatus.Completed;
-        if (rawStatus.includes('cancel')) status = TicketStatus.Cancelled;
-
-        return {
-          id: String(row.ticket_id || row.id || row.TicketID || row.ID || '').trim(),
-          customerName: row.customer_name || row.customerName || row.CustomerName || row.Name || '',
-          phone: row.phone || row.Phone || row.Mobile || '',
-          address: row.address || row.Address || '',
-          complaint: row.complaint || row.Complaint || row.Issue || '',
-          technicianId: row.technician_id || row.technicianId || row.StaffID || row.TechID || '',
-          technicianName: row.technician_name || row.technicianName || row.StaffName || row.TechName || '',
-          status,
-          createdAt: row.created_at || row.CreatedAt || row.Date ? new Date(row.created_at || row.CreatedAt || row.Date) : new Date(),
-          serviceCategory: row.service_category || row.Category || row.serviceCategory || '',
-        };
-      });
-
-      console.log("✅ SYNC: Normalized Tickets:", normalized);
+      if (error) throw error;
+      const normalized = (data || []).map(normalizeTicket);
       setTickets(normalized);
       localStorage.setItem('tickets', JSON.stringify(normalized));
     } catch (err) {
-      console.error("❌ SYNC: Failed to load tickets:", err);
+      console.error("❌ Supabase: Failed to load tickets:", err);
     }
   };
 
@@ -139,16 +103,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const savedUser = localStorage.getItem('currentUser');
       if (savedUser) setUser(JSON.parse(savedUser));
 
-      const savedTechs = localStorage.getItem('technicians');
-      if (savedTechs) setTechnicians(JSON.parse(savedTechs));
-
-      const savedTickets = localStorage.getItem('tickets');
-      if (savedTickets) setTickets(JSON.parse(savedTickets));
-
       await syncTickets();
       setIsAppLoading(false);
     };
     init();
+
+    // Subscribe to real-time changes
+    const techSub = supabase
+      .channel('tech-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'technicians' }, () => loadTechnicians())
+      .subscribe();
+
+    const ticketSub = supabase
+      .channel('ticket-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadTickets())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(techSub);
+      supabase.removeChannel(ticketSub);
+    };
   }, []);
 
   const login = (u: User) => {
@@ -162,106 +136,127 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('currentUser');
   };
 
-  const addTicket = async (ticket: any) => {
-    const payload = {
-      action: 'NEW_TICKET',
-      function: 'NEW_TICKET',
-      ...ticket // FLAT payload for maximum compatibility
-    };
+  const addTicket = async (ticketData: any) => {
+    const newId = `TKT-${Date.now()}`;
+    const { error } = await supabase
+      .from('tickets')
+      .insert([{
+        id: newId,
+        customer_name: ticketData.customerName,
+        phone: ticketData.phone,
+        address: ticketData.address,
+        complaint: ticketData.complaint,
+        status: 'New',
+        category: ticketData.serviceCategory || ticketData.category,
+        preferred_time: ticketData.preferredTime,
+        technician_id: ticketData.technicianId,
+        technician_name: ticketData.technicianName,
+        service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }]);
 
-    console.log('📤 WEBHOOK: Sending New Ticket (FLAT):', payload);
+    if (error) {
+      console.error("❌ Supabase Error:", error);
+      alert("Failed to save ticket: " + error.message);
+      return;
+    }
 
-    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+    // Optional: Trigger n8n for WhatsApp (Async)
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    setTimeout(syncTickets, 3000);
+      body: JSON.stringify({ action: 'NEW_TICKET', ...ticketData, id: newId })
+    }).catch(e => console.warn("n8n WhatsApp trigger failed, but ticket is saved in DB."));
+
+    await loadTickets();
+  };
+
+  const updateTicket = async (ticket: any) => {
+    console.log("🔄 Supabase: Updating Ticket:", ticket);
+    const { error } = await supabase
+      .from('tickets')
+      .update({
+        status: ticket.status,
+        completed_at: ticket.status === 'Completed' ? new Date().toISOString() : ticket.completed_at,
+        work_done: ticket.workDone,
+        amount_collected: ticket.amountCollected,
+        payment_method: ticket.paymentStatus || ticket.paymentMethod,
+        parts_replaced: ticket.partsReplaced,
+        service_checklist: ticket.serviceChecklist,
+        admin_notes: ticket.adminNotes,
+        technician_id: ticket.technicianId,
+        technician_name: ticket.technicianName
+      })
+      .eq('id', ticket.id);
+
+    if (error) {
+      console.error("❌ Supabase Update Error:", error);
+      throw error;
+    }
+
+    if (ticket.status === 'Completed') {
+      // Trigger n8n for Invoice (Async)
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'JOB_COMPLETED', ...ticket })
+      }).catch(() => { });
+    }
+
+    await loadTickets();
   };
 
   const addTechnician = async (tech: any) => {
     const newId = `TECH-${Date.now()}`;
-    pendingActions.current.added.add(newId);
+    const { error } = await supabase
+      .from('technicians')
+      .insert([{
+        id: newId,
+        name: tech.name,
+        pin: tech.pin,
+        phone: tech.phone,
+        role: tech.role || 'Technician',
+        status: 'ACTIVE'
+      }]);
 
-    // EXTREMELY ROBUST FLAT PAYLOAD
-    // We send every possible field name so n8n can easily map to any Google Sheet column
-    const payload = {
-      action: "ADD_TECHNICIAN",
-      function: "ADD_TECHNICIAN",
-
-      id: newId,
-      technician_id: newId,
-      staff_id: newId,
-      ID: newId,
-
-      name: tech.name,
-      technician_name: tech.name,
-      staff_name: tech.name,
-      FullName: tech.name,
-      Name: tech.name,
-
-      pin: tech.pin || tech.password || "1234",
-      password: tech.pin || tech.password || "1234",
-      PIN: tech.pin || tech.password || "1234",
-      Password: tech.pin || tech.password || "1234",
-
-      phone: tech.phone || "",
-      Phone: tech.phone || "",
-      Mobile: tech.phone || "",
-
-      status: "ACTIVE",
-      Status: "ACTIVE",
-      role: tech.role || "Technician",
-      Role: tech.role || "Technician",
-      created_at: new Date().toISOString(),
-      CreatedAt: new Date().toISOString(),
-      Date: new Date().toISOString(),
-    };
-
-    console.log('📤 WEBHOOK: Sending Add Technician (FLAT):', payload);
-
-    try {
-      const res = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      console.log('✅ WEBHOOK: Response Status:', res.status);
-    } catch (err) {
-      console.error('❌ WEBHOOK: Failed to send Add Technician:', err);
+    if (error) {
+      console.error("❌ Supabase Error:", error);
+      alert("Failed to add technician: " + error.message);
+      return;
     }
-
-    setTimeout(() => {
-      pendingActions.current.added.delete(newId);
-      syncTickets();
-    }, 3000);
+    await loadTechnicians();
   };
 
   const deleteTechnician = async (technicianId: string) => {
-    pendingActions.current.deleted.add(technicianId);
-    setTechnicians(prev => prev.filter(t => t.id !== technicianId));
+    const { error } = await supabase
+      .from('technicians')
+      .delete()
+      .eq('id', technicianId);
 
-    const payload = {
-      action: 'DELETE_TECHNICIAN',
-      function: 'DELETE_TECHNICIAN',
-      technicianId,
-      id: technicianId,
-      staff_id: technicianId,
-      technician_id: technicianId
-    };
+    if (error) throw error;
+    await loadTechnicians();
+  };
 
-    console.log('📤 WEBHOOK: Sending Delete Technician:', payload);
+  const markAttendance = async (status: 'Clock In' | 'Clock Out') => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('attendance')
+      .insert([{
+        technician_id: user.id,
+        technician_name: user.name,
+        status,
+        timestamp: new Date().toISOString()
+      }]);
 
-    await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    if (error) throw error;
+  };
 
-    setTimeout(() => {
-      pendingActions.current.deleted.delete(technicianId);
-      syncTickets();
-    }, 3000);
+  const sendHeartbeat = async () => {
+    if (!user || user.role !== 'Technician') return;
+    await supabase
+      .from('technicians')
+      .update({ last_seen: new Date().toISOString() })
+      .eq('id', user.id);
   };
 
   return (
@@ -275,8 +270,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         login,
         logout,
         addTicket,
+        updateTicket,
         addTechnician,
         deleteTechnician,
+        markAttendance,
+        sendHeartbeat,
         syncTickets,
       }}
     >

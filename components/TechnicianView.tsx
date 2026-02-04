@@ -7,7 +7,7 @@ interface TechnicianViewProps {
 }
 
 const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
-  const { user, tickets, logout, syncTickets, isSyncing } = useAppContext();
+  const { user, tickets, logout, syncTickets, isSyncing, markAttendance } = useAppContext();
   const [filter, setFilter] = useState<'All' | 'New' | 'InProgress' | 'Completed'>('All');
 
   const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
@@ -32,6 +32,28 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
           </button>
           <button onClick={logout} className="text-xs bg-red-50 text-red-600 font-bold py-2 px-4 rounded-xl">Logout</button>
         </div>
+      </div>
+
+      {/* Attendance Quick Links */}
+      <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 flex justify-around">
+        <button
+          onClick={() => markAttendance('Clock In')}
+          className="flex flex-col items-center space-y-1"
+        >
+          <div className="p-3 bg-green-50 text-green-600 rounded-full">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <span className="text-[10px] font-bold text-gray-500 uppercase">Clock In</span>
+        </button>
+        <button
+          onClick={() => markAttendance('Clock Out')}
+          className="flex flex-col items-center space-y-1"
+        >
+          <div className="p-3 bg-red-50 text-red-600 rounded-full">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg>
+          </div>
+          <span className="text-[10px] font-bold text-gray-500 uppercase">Clock Out</span>
+        </button>
       </div>
 
       <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
