@@ -15,8 +15,8 @@ const AddMockFeedback: React.FC<{ ticketId: string }> = ({ ticketId }) => {
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
 
-    const handleSubmit = () => {
-        addFeedback({
+    const handleSubmit = async () => {
+        await addFeedback({
             id: `FB-${Date.now()}`,
             ticketId,
             rating,
@@ -29,11 +29,11 @@ const AddMockFeedback: React.FC<{ ticketId: string }> = ({ ticketId }) => {
     if (!showForm) {
         return <button onClick={() => setShowForm(true)} className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded hover:bg-gray-300">Add Mock Feedback</button>
     }
-    
+
     return (
         <div className="mt-2 p-2 border rounded bg-gray-50 text-xs">
             <div className="flex items-center space-x-1 mb-2">
-                {[1,2,3,4,5].map(r => <button key={r} onClick={() => setRating(r)}><StarIcon filled={r <= rating}/></button>)}
+                {[1, 2, 3, 4, 5].map(r => <button key={r} onClick={() => setRating(r)}><StarIcon filled={r <= rating} /></button>)}
             </div>
             <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Comment..." className="w-full border rounded p-1 mb-2 text-xs"></textarea>
             <button onClick={handleSubmit} className="bg-glen-blue text-white px-3 py-1 rounded text-xs">Submit</button>
@@ -49,48 +49,47 @@ const TechnicianRatings: React.FC = () => {
             <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-4">Technician Ratings</h3>
                 <p className="text-center text-gray-500 py-8">No feedback has been received yet.</p>
-                
+
                 <div className="mt-4 border-t pt-4">
                     <h4 className="font-semibold text-gray-700">Add Mock Feedback to a Completed Job:</h4>
                     {tickets.filter(t => t.status === TicketStatus.Completed).slice(0, 3).map(ticket => (
                         <div key={ticket.id} className="mt-2 p-2 border rounded-md text-sm">
-                           <p><strong>Ticket:</strong> {ticket.id} ({ticket.customerName})</p>
-                           <AddMockFeedback ticketId={ticket.id}/>
+                            <p><strong>Ticket:</strong> {ticket.id} ({ticket.customerName})</p>
+                            <AddMockFeedback ticketId={ticket.id} />
                         </div>
                     ))}
-                     {tickets.filter(t => t.status === TicketStatus.Completed).length === 0 && <p className="text-xs text-gray-500 mt-2">No jobs are completed yet.</p>}
+                    {tickets.filter(t => t.status === TicketStatus.Completed).length === 0 && <p className="text-xs text-gray-500 mt-2">No jobs are completed yet.</p>}
                 </div>
             </div>
         )
     }
 
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-800 mb-4">Technician Ratings</h3>
-      <div className="space-y-6">
-        {feedback.map(fb => {
-            const ticket = tickets.find(t => t.id === fb.ticketId);
-            if (!ticket) return null;
-            const technician = technicians.find(t => t.id === ticket.technicianId);
+    return (
+        <div>
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Technician Ratings</h3>
+            <div className="space-y-6">
+                {feedback.map(fb => {
+                    const ticket = tickets.find(t => t.id === fb.ticketId);
+                    if (!ticket) return null;
+                    const technician = technicians.find(t => t.id === ticket.technicianId);
 
-            return (
-                <div key={fb.id} className="border-b pb-4">
-                    <div className="flex justify-between items-center">
-                        <p className="font-semibold text-gray-700">{technician?.name || 'Unknown'}</p>
-                        <div className="flex">
-                            {[...Array(5)].map((_, i) => <StarIcon key={i} filled={i < fb.rating} />)}
+                    return (
+                        <div key={fb.id} className="border-b pb-4">
+                            <div className="flex justify-between items-center">
+                                <p className="font-semibold text-gray-700">{technician?.name || 'Unknown'}</p>
+                                <div className="flex">
+                                    {[...Array(5)].map((_, i) => <StarIcon key={i} filled={i < fb.rating} />)}
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500">For Ticket: {ticket.id} ({ticket.customerName})</p>
+                            {fb.comment && <p className="mt-2 text-sm bg-gray-100 p-2 rounded-md">"{fb.comment}"</p>}
+                            <p className="text-right text-xs text-gray-400 mt-1">{new Date(fb.createdAt).toLocaleDateString()}</p>
                         </div>
-                    </div>
-                    <p className="text-sm text-gray-500">For Ticket: {ticket.id} ({ticket.customerName})</p>
-                    {fb.comment && <p className="mt-2 text-sm bg-gray-100 p-2 rounded-md">"{fb.comment}"</p>}
-                    <p className="text-right text-xs text-gray-400 mt-1">{new Date(fb.createdAt).toLocaleDateString()}</p>
-                </div>
-            )
-        })}
-      </div>
-    </div>
-  );
+                    )
+                })}
+            </div>
+        </div>
+    );
 };
 
 export default TechnicianRatings;
-   

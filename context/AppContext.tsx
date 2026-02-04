@@ -14,18 +14,21 @@ interface AppContextType {
   user: User | null;
   tickets: any[];
   technicians: any[];
+  feedback: any[];
   isAppLoading: boolean;
   isSyncing: boolean;
   login: (u: User) => void;
   logout: () => void;
   addTicket: (t: any) => Promise<void>;
   updateTicket: (t: any) => Promise<void>;
+  addFeedback: (f: any) => Promise<void>;
   addTechnician: (t: any) => Promise<void>;
   deleteTechnician: (technicianId: string) => Promise<void>;
   markAttendance: (status: 'Clock In' | 'Clock Out') => Promise<void>;
   sendHeartbeat: () => Promise<void>;
   syncTickets: () => Promise<void>;
   resetAllTechnicianPoints: () => Promise<void>;
+  sendReceipt: (ticketId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -34,12 +37,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [feedback, setFeedback] = useState<any[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const normalizeTicket = (t: any) => ({
     ...t,
     customerName: t.customer_name,
+    customerEmail: t.customer_email,
     createdAt: t.created_at,
     serviceBookingDate: t.service_booking_date || t.created_at,
     technicianId: t.technician_id,
@@ -96,8 +101,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const syncTickets = async () => {
     setIsSyncing(true);
-    await Promise.all([loadTechnicians(), loadTickets()]);
+    await Promise.all([loadTechnicians(), loadTickets(), loadFeedback()]);
     setIsSyncing(false);
+  };
+
+  const loadFeedback = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('feedback')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setFeedback(data || []);
+    } catch (err) {
+      console.error("❌ Supabase: Failed to load feedback:", err);
+    }
   };
 
   useEffect(() => {
@@ -121,9 +140,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadTickets())
       .subscribe();
 
+    const feedbackSub = supabase
+      .channel('feedback-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, () => loadFeedback())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(techSub);
       supabase.removeChannel(ticketSub);
+      supabase.removeChannel(feedbackSub);
     };
   }, []);
 
@@ -145,6 +170,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .insert([{
         id: newId,
         customer_name: ticketData.customerName,
+        customer_email: ticketData.customerEmail,
         phone: ticketData.phone,
         address: ticketData.address,
         complaint: ticketData.complaint,
@@ -196,7 +222,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw error;
     }
 
-    if (ticket.status === 'Completed') {
+    if (ticket.status === 'Completed' && !ticket.completedAt) {
+      // Award 50 points to technician on first-time completion
+      const currentTech = technicians.find(tech => tech.id === ticket.technicianId);
+      const newPoints = (currentTech?.points || 0) + 50;
+
+      await supabase
+        .from('technicians')
+        .update({ points: newPoints })
+        .eq('id', ticket.technicianId);
+
+      await loadTechnicians();
+
       // Trigger n8n for Invoice (Async)
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
@@ -328,6 +365,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const addFeedback = async (f: any) => {
+    try {
+      const { error } = await supabase
+        .from('feedback')
+        .insert([{
+          id: f.id,
+          ticket_id: f.ticketId,
+          rating: f.rating,
+          comment: f.comment,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+      await loadFeedback();
+    } catch (err) {
+      console.error("❌ Supabase: Failed to add feedback:", err);
+    }
+  };
+
+  const sendReceipt = async (ticketId: string) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+
+    const message = `*PAYMENT RECEIPT*\n\n` +
+      `Ticket: ${ticketId}\n` +
+      `Customer: ${ticket.customerName}\n` +
+      `Work: ${ticket.workDone}\n` +
+      `Amount Paid: ₹${ticket.amountCollected}\n` +
+      `Payment: ${ticket.paymentStatus}\n\n` +
+      `Thank you for choosing ${APP_CONFIG.BRANDING.companyName}!`;
+
+    const whatsappUrl = `https://wa.me/91${ticket.phone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -346,6 +418,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendHeartbeat,
         syncTickets,
         resetAllTechnicianPoints,
+        feedback,
+        addFeedback,
+        sendReceipt,
       }}
     >
       {children}

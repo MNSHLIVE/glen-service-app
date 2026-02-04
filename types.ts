@@ -53,31 +53,32 @@ export enum PaymentStatus {
 }
 
 export interface ServiceChecklist {
-    amcDiscussion: boolean;
+  amcDiscussion: boolean;
 }
 
 export enum PartType {
-    Repair = 'Repair',
-    Replacement = 'Replacement',
+  Repair = 'Repair',
+  Replacement = 'Replacement',
 }
 
 export enum PartWarrantyStatus {
-    InWarranty = 'In-Warranty',
-    OutOfWarranty = 'Out Of Warranty',
+  InWarranty = 'In-Warranty',
+  OutOfWarranty = 'Out Of Warranty',
 }
 
 export interface ReplacedPart {
-    name: string;
-    price: number;
-    type: PartType;
-    warrantyStatus: PartWarrantyStatus;
-    category: string;
-    warrantyDuration: string;
+  name: string;
+  price: number;
+  type: PartType;
+  warrantyStatus: PartWarrantyStatus;
+  category: string;
+  warrantyDuration: string;
 }
 
 export interface Ticket {
   id: string;
   customerName: string;
+  customerEmail?: string;
   phone: string;
   address: string;
   complaint: string;
@@ -88,11 +89,11 @@ export interface Ticket {
   preferredTime: string;
   serviceCategory: string;
   productDetails: {
-      make: string;
-      segment: string;
-      category: string;
-      subCategory: string;
-      product: string;
+    make: string;
+    segment: string;
+    category: string;
+    subCategory: string;
+    product: string;
   };
   symptoms: string[];
   serialNo?: string;
