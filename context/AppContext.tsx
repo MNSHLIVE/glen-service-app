@@ -167,7 +167,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'NEW_TICKET', ...ticketData, id: newId })
+      body: JSON.stringify({ function: 'NEW_TICKET', ticket: { ...ticketData, ticket_id: newId } })
     }).catch(e => console.warn("n8n WhatsApp trigger failed, but ticket is saved in DB."));
 
     await loadTickets();
@@ -201,7 +201,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'JOB_COMPLETED', ...ticket })
+        body: JSON.stringify({
+          function: 'JOB_COMPLETED',
+          ticket_id: ticket.id,
+          completed_at: new Date().toISOString(),
+          technicianId: ticket.technicianId,
+          work_done_summary: ticket.workDone,
+          amount_collected: ticket.amountCollected,
+          payment_status: ticket.paymentStatus || ticket.paymentMethod,
+          points_awarded: 50, // Example points
+          partsUsed: JSON.stringify(ticket.partsReplaced),
+          amc_discussion: ticket.serviceChecklist?.amcDiscussion ? 'Yes' : 'No',
+          free_service: ticket.free_service ? 'Yes' : 'No'
+        })
       }).catch(() => { });
     }
 
