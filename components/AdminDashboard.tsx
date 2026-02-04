@@ -5,6 +5,7 @@ import ViewJobs from './ViewJobs';
 import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
 import SettingsModal from './SettingsModal';
+import PerformanceView from './PerformanceView';
 import { TicketStatus } from '../types';
 
 const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onViewTicket }) => {
@@ -25,6 +26,12 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
             pending: tickets.filter(t => t.status === TicketStatus.InProgress).length,
             completed: tickets.filter(t => t.status === TicketStatus.Completed).length,
         };
+    }, [tickets]);
+
+    const totalCollection = useMemo(() => {
+        return tickets
+            .filter(t => t.status === TicketStatus.Completed)
+            .reduce((sum, t) => sum + (Number(t.amountCollected) || 0), 0);
     }, [tickets]);
 
     return (
@@ -64,6 +71,10 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                     <p className="text-[10px] font-bold text-green-500 uppercase">Done</p>
                     <p className="text-2xl font-bold text-green-600">{counts.completed}</p>
                 </div>
+                <div className="bg-white p-3 rounded-2xl shadow-sm border border-indigo-50 text-center transition-transform hover:scale-105 col-span-3 mt-2">
+                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mb-1">Total Collection</p>
+                    <p className="text-3xl font-black text-indigo-700">₹{totalCollection.toLocaleString('en-IN')}</p>
+                </div>
             </div>
 
             <div className="bg-white p-5 rounded-2xl shadow-md border-t-4 border-indigo-500 space-y-4">
@@ -86,7 +97,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
             </div>
 
             <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
-                {['jobs', 'ratings'].map(v => (
+                {['jobs', 'ratings', 'performance'].map(v => (
                     <button
                         key={v}
                         onClick={() => setActiveView(v)}
@@ -100,6 +111,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
             <div className="bg-white p-5 rounded-3xl shadow-xl border min-h-[400px]">
                 {activeView === 'jobs' && <ViewJobs onViewTicket={onViewTicket} />}
                 {activeView === 'ratings' && <TechnicianRatings />}
+                {activeView === 'performance' && <PerformanceView />}
             </div>
 
             {showManual && <AddTicketModal onClose={() => setShowManual(false)} />}

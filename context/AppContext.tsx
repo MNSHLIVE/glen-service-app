@@ -25,6 +25,7 @@ interface AppContextType {
   markAttendance: (status: 'Clock In' | 'Clock Out') => Promise<void>;
   sendHeartbeat: () => Promise<void>;
   syncTickets: () => Promise<void>;
+  resetAllTechnicianPoints: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,12 +40,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const normalizeTicket = (t: any) => ({
     ...t,
     customerName: t.customer_name,
+    createdAt: t.created_at,
     serviceBookingDate: t.service_booking_date || t.created_at,
     technicianId: t.technician_id,
     technicianName: t.technician_name,
     preferredTime: t.preferred_time,
     serviceCategory: t.category,
-    amountCollected: t.amount_collected,
+    amountCollected: Number(t.amount_collected) || 0,
     paymentStatus: t.payment_method,
     workDone: t.work_done,
     partsReplaced: t.parts_replaced,
@@ -258,6 +260,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .update({ last_seen: new Date().toISOString() })
       .eq('id', user.id);
   };
+  const resetAllTechnicianPoints = async () => {
+    try {
+      const { error } = await supabase
+        .from('technicians')
+        .update({ points: 0 });
+
+      if (error) throw error;
+      await loadTechnicians();
+    } catch (err) {
+      console.error("❌ Supabase: Failed to reset points:", err);
+      alert("Failed to reset points");
+    }
+  };
 
   return (
     <AppContext.Provider
@@ -276,6 +291,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         markAttendance,
         sendHeartbeat,
         syncTickets,
+        resetAllTechnicianPoints,
       }}
     >
       {children}
