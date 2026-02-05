@@ -4,22 +4,24 @@ import { useAppContext } from '../context/AppContext';
 import JobCard from './JobCard';
 
 interface ViewJobsProps {
-    onViewTicket: (ticketId: string) => void;
+  onViewTicket: (ticketId: string) => void;
+  filteredTickets?: any[];
 }
 
-const ViewJobs: React.FC<ViewJobsProps> = ({ onViewTicket }) => {
-  const { tickets } = useAppContext();
+const ViewJobs: React.FC<ViewJobsProps> = ({ onViewTicket, filteredTickets }) => {
+  const { tickets: contextTickets } = useAppContext();
+  const displayTickets = filteredTickets || contextTickets;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold text-gray-800">All Service Jobs</h3>
-        <p className="text-sm text-gray-500">Page: 1/1 | Total Records: {tickets.length}</p>
+        <h3 className="text-xl font-bold text-gray-800">Service Jobs</h3>
+        <p className="text-sm text-gray-500">Total: {displayTickets.length}</p>
       </div>
-      
-      {tickets.length > 0 ? (
+
+      {displayTickets.length > 0 ? (
         <div className="space-y-4">
-          {tickets.map(ticket => (
+          {displayTickets.map(ticket => (
             <JobCard key={ticket.id} ticket={ticket} onViewDetails={onViewTicket} />
           ))}
         </div>

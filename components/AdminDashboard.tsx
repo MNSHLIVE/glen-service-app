@@ -14,29 +14,43 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
     const [showManual, setShowManual] = useState(false);
     const [showIntel, setShowIntel] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const isToday = (dateStr: any) => {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        return date.toISOString().split('T')[0] === selectedDate;
+    };
 
     const onlineCount = useMemo(() => {
         const fiveMins = 5 * 60 * 1000;
         return technicians.filter(t => t.lastSeen && (Date.now() - new Date(t.lastSeen).getTime() < fiveMins)).length;
     }, [technicians]);
 
+    const filteredTickets = useMemo(() => {
+        return tickets.filter(t => {
+            const ticketDate = t.status === TicketStatus.Completed ? t.completedAt : t.createdAt;
+            return isToday(ticketDate);
+        });
+    }, [tickets, selectedDate]);
+
     const counts = useMemo(() => {
         return {
-            new: tickets.filter(t => t.status === TicketStatus.New).length,
-            pending: tickets.filter(t => t.status === TicketStatus.InProgress).length,
-            completed: tickets.filter(t => t.status === TicketStatus.Completed).length,
+            new: filteredTickets.filter(t => t.status === TicketStatus.New).length,
+            pending: filteredTickets.filter(t => t.status === TicketStatus.InProgress).length,
+            completed: filteredTickets.filter(t => t.status === TicketStatus.Completed).length,
         };
-    }, [tickets]);
+    }, [filteredTickets]);
 
     const totalCollection = useMemo(() => {
-        return tickets
+        return filteredTickets
             .filter(t => t.status === TicketStatus.Completed)
             .reduce((sum, t) => sum + (Number(t.amountCollected) || 0), 0);
-    }, [tickets]);
+    }, [filteredTickets]);
 
     return (
         <div className="space-y-6">
-            <div className="bg-white p-4 rounded-2xl shadow-lg border-b-4 border-blue-600 flex justify-between items-center transition-all">
+            <div className="bg-white p-4 rounded-2xl shadow-lg border-b-4 border-blue-600 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Admin Dashboard</h2>
                     <div className="flex items-center space-x-2 mt-1">
@@ -50,7 +64,24 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                         </div>
                     </div>
                 </div>
-                <div className="flex space-x-3">
+
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div className="flex items-center bg-gray-50 border rounded-xl px-2 py-1">
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="bg-transparent text-xs font-bold text-gray-600 outline-none"
+                        />
+                        {selectedDate !== new Date().toISOString().split('T')[0] && (
+                            <button
+                                onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                                className="ml-2 text-[10px] text-blue-600 font-bold hover:underline"
+                            >
+                                Today
+                            </button>
+                        )}
+                    </div>
                     <button onClick={() => setShowSettings(true)} className="p-3 bg-gray-100 rounded-2xl text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                         <SettingsIcon />
                     </button>
@@ -109,7 +140,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
             </div>
 
             <div className="bg-white p-5 rounded-3xl shadow-xl border min-h-[400px]">
-                {activeView === 'jobs' && <ViewJobs onViewTicket={onViewTicket} />}
+                {activeView === 'jobs' && <ViewJobs onViewTicket={onViewTicket} filteredTickets={filteredTickets} />}
                 {activeView === 'ratings' && <TechnicianRatings />}
                 {activeView === 'performance' && <PerformanceView />}
             </div>
