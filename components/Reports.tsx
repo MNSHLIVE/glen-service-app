@@ -264,7 +264,6 @@ const AdminTicketDetails: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
         <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
             <DetailSection title="Customer & Job Info">
                 <DetailItem label="Customer" value={ticket.customerName} />
-                <DetailItem label="Email" value={ticket.customerEmail} />
                 <DetailItem label="Phone">
                     <div className="flex items-center space-x-2">
                         <span>{ticket.phone}</span>

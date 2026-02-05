@@ -67,6 +67,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     pin: tech.pin || tech.password
   });
 
+  const normalizeFeedback = (f: any) => ({
+    ...f,
+    ticketId: f.ticket_id,
+    createdAt: f.created_at
+  });
+
   const loadTechnicians = async () => {
     try {
       const { data, error } = await supabase
@@ -113,7 +119,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setFeedback(data || []);
+      const normalized = (data || []).map(normalizeFeedback);
+      setFeedback(normalized);
     } catch (err) {
       console.error("❌ Supabase: Failed to load feedback:", err);
     }
@@ -170,7 +177,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .insert([{
         id: newId,
         customer_name: ticketData.customerName,
-        customer_email: ticketData.customerEmail,
         phone: ticketData.phone,
         address: ticketData.address,
         complaint: ticketData.complaint,
@@ -388,13 +394,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket) return;
 
-    const message = `*PAYMENT RECEIPT*\n\n` +
-      `Ticket: ${ticketId}\n` +
-      `Customer: ${ticket.customerName}\n` +
-      `Work: ${ticket.workDone}\n` +
-      `Amount Paid: ₹${ticket.amountCollected}\n` +
-      `Payment: ${ticket.paymentStatus}\n\n` +
-      `Thank you for choosing ${APP_CONFIG.BRANDING.companyName}!`;
+    const feedbackLink = `${window.location.origin}/?feedback=true&ticketId=${ticketId}`;
+
+    const message = `*THANK YOU FROM ${APP_CONFIG.BRANDING.companyName.toUpperCase()}*\n\n` +
+      `*Ticket ID:* ${ticketId}\n` +
+      `*Status:* Completed\n` +
+      `*Amount Paid:* ₹${ticket.amountCollected || 0}\n` +
+      `*Payment:* ${ticket.paymentStatus || 'Paid'}\n\n` +
+      `We value your feedback! Please rate our technician's service here:\n` +
+      `${feedbackLink}\n\n` +
+      `Have a great day!`;
 
     const whatsappUrl = `https://wa.me/91${ticket.phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
