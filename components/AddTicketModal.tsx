@@ -13,7 +13,6 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
 
   const [customerName, setCustomerName] = useState(initialData?.customerName || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
-  const [phone, setPhone] = useState(initialData?.phone || '');
   const [address, setAddress] = useState(initialData?.address || '');
   const [complaint, setComplaint] = useState(initialData?.complaint || '');
   const [technicianId, setTechnicianId] = useState('');
@@ -72,7 +71,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
               <input placeholder="Customer Name" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full border rounded-xl px-4 py-3 mt-1" />
             </div>
             <div className="grid grid-cols-1 gap-3">
-              <input placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full border rounded-xl px-4 py-3" />
+              <input placeholder="Phone Number (Required)" value={phone} onChange={e => setPhone(e.target.value)} className="w-full border rounded-xl px-4 py-3" />
             </div>
             <textarea placeholder="Complete Address" value={address} onChange={e => setAddress(e.target.value)} className="w-full border rounded-xl px-4 py-3" rows={2} />
 
