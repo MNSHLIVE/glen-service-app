@@ -14,6 +14,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
     const [showManual, setShowManual] = useState(false);
     const [showIntel, setShowIntel] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [parsedData, setParsedData] = useState<any>(null);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
     const isToday = (dateStr: any) => {
@@ -29,8 +30,16 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
 
     const filteredTickets = useMemo(() => {
         return tickets.filter(t => {
-            const ticketDate = t.status === TicketStatus.Completed ? t.completedAt : t.createdAt;
-            return isToday(ticketDate);
+            // Keep completed tickets filtered by date
+            if (t.status === TicketStatus.Completed) {
+                return isToday(t.completedAt);
+            }
+            // Keep escalated tickets ALWAYS visible if they are not completed
+            if (t.isEscalated && t.status !== TicketStatus.Completed) {
+                return true;
+            }
+            // All other tickets (New/InProgress) filter by creation date
+            return isToday(t.createdAt);
         });
     }, [tickets, selectedDate]);
 
@@ -102,9 +111,13 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                     <p className="text-[10px] font-bold text-green-500 uppercase">Done</p>
                     <p className="text-2xl font-bold text-green-600">{counts.completed}</p>
                 </div>
-                <div className="bg-white p-3 rounded-2xl shadow-sm border border-indigo-50 text-center transition-transform hover:scale-105 col-span-3 mt-2">
+                <div className="bg-white p-3 rounded-2xl shadow-sm border border-indigo-50 text-center transition-transform hover:scale-105 col-span-2 mt-2">
                     <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mb-1">Total Collection</p>
                     <p className="text-3xl font-black text-indigo-700">₹{totalCollection.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-red-50 p-3 rounded-2xl shadow-sm border border-red-100 text-center transition-transform hover:scale-105 col-span-1 mt-2">
+                    <p className="text-[10px] font-bold text-red-600 uppercase mb-1">Escalated</p>
+                    <p className="text-2xl font-black text-red-800">{tickets.filter(t => t.isEscalated && t.status !== TicketStatus.Completed).length}</p>
                 </div>
             </div>
 
@@ -145,8 +158,18 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                 {activeView === 'performance' && <PerformanceView />}
             </div>
 
-            {showManual && <AddTicketModal onClose={() => setShowManual(false)} />}
-            {showIntel && <IntelligentAddTicketModal mode="text" onClose={() => setShowIntel(false)} onParsed={() => { setShowIntel(false); setShowManual(true); }} />}
+            {showManual && <AddTicketModal onClose={() => { setShowManual(false); setParsedData(null); }} initialData={parsedData} />}
+            {showIntel && (
+                <IntelligentAddTicketModal
+                    mode="text"
+                    onClose={() => setShowIntel(false)}
+                    onParsed={(data) => {
+                        setParsedData(data);
+                        setShowIntel(false);
+                        setShowManual(true);
+                    }}
+                />
+            )}
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
         </div>
     );

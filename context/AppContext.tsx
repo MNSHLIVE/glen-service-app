@@ -29,6 +29,7 @@ interface AppContextType {
   syncTickets: () => Promise<void>;
   resetAllTechnicianPoints: () => Promise<void>;
   sendReceipt: (ticketId: string) => Promise<void>;
+  reopenTicket: (ticketId: string, seniorTechId: string, notes: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -409,6 +410,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     window.open(whatsappUrl, '_blank');
   };
 
+  const reopenTicket = async (ticketId: string, seniorTechId: string, notes: string) => {
+    console.log("🚀 Escalating Ticket:", ticketId, "to Tech:", seniorTechId);
+
+    const seniorTech = technicians.find(t => t.id === seniorTechId);
+
+    const { error } = await supabase
+      .from('tickets')
+      .update({
+        status: 'New',
+        is_escalated: true,
+        technician_id: seniorTechId,
+        technician_name: seniorTech?.name || 'Senior Staff',
+        admin_notes: notes ? `ESCALATION: ${notes}` : 'Escalated to Senior Technician'
+      })
+      .eq('id', ticketId);
+
+    if (error) {
+      console.error("❌ Escalation Error:", error);
+      alert("Failed to escalate ticket: " + error.message);
+      return;
+    }
+
+    alert("✅ Ticket Escalated Successfully! Status reset to New.");
+
+    // Trigger n8n for Escalation Alert (Async)
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'ESCALATION',
+        ticket_id: ticketId,
+        senior_tech: seniorTech?.name,
+        notes: notes
+      })
+    }).catch(e => console.warn("n8n Escalation trigger failed."));
+
+    await syncTickets();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -430,6 +470,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         feedback,
         addFeedback,
         sendReceipt,
+        reopenTicket,
       }}
     >
       {children}
