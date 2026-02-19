@@ -196,12 +196,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    // Optional: Trigger n8n for WhatsApp (Async)
+    // Trigger n8n for WhatsApp & Google Sheets (Async)
     fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ function: 'NEW_TICKET', ticket: { ...ticketData, ticket_id: newId } })
-    }).catch(e => console.warn("n8n WhatsApp trigger failed, but ticket is saved in DB."));
+      body: JSON.stringify({
+        function: 'NEW_TICKET',
+        action: 'NEW_TICKET',
+        ticket_id: newId,
+        ...ticketData,
+        ticket: { ...ticketData, ticket_id: newId } // Keep nested for backward compatibility
+      })
+    }).catch(e => console.warn("n8n sync failed, but ticket is saved in DB."));
 
     await loadTickets();
   };
@@ -241,22 +247,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       await loadTechnicians();
 
-      // Trigger n8n for Invoice (Async)
+      // Trigger n8n for Invoice & Google Sheets (Async)
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           function: 'JOB_COMPLETED',
+          action: 'JOB_COMPLETED',
           ticket_id: ticket.id,
           completed_at: new Date().toISOString(),
-          technicianId: ticket.technicianId,
+          technician_id: ticket.technicianId,
+          technician_name: ticket.technicianName,
+          customer_name: ticket.customerName,
           work_done_summary: ticket.workDone,
           amount_collected: ticket.amountCollected,
           payment_status: ticket.paymentStatus || ticket.paymentMethod,
-          points_awarded: 50, // Example points
-          partsUsed: JSON.stringify(ticket.partsReplaced),
+          points_awarded: 50,
+          parts_used: JSON.stringify(ticket.partsReplaced),
           amc_discussion: ticket.serviceChecklist?.amcDiscussion ? 'Yes' : 'No',
-          free_service: ticket.free_service ? 'Yes' : 'No'
+          free_service: ticket.free_service ? 'Yes' : 'No',
+          ticket: { ...ticket, status: 'Completed' } // Nested fallback
         })
       }).catch(() => { });
     }
@@ -289,12 +299,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         function: 'ADD_TECHNICIAN',
+        action: 'ADD_TECHNICIAN',
         technician_id: newId,
         technician_name: tech.name,
         pin: tech.pin,
         phone: tech.phone,
         role: tech.role || 'Technician',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        technician: { id: newId, ...tech, status: 'ACTIVE' } // Nested fallback
       })
     }).catch(() => { });
 
@@ -315,6 +327,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         function: 'DELETE_TECHNICIAN',
+        action: 'DELETE_TECHNICIAN',
         technician_id: technicianId,
         status: 'INACTIVE',
         deleted_at: new Date().toISOString()
@@ -343,10 +356,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         function: 'ATTENDANCE',
+        action: 'ATTENDANCE',
         type: status === 'Clock In' ? 'IN' : 'OUT',
         technician_id: user.id,
         technician_name: user.name,
-        time: new Date().toISOString()
+        status: status, // Include both type and status
+        time: new Date().toISOString(),
+        timestamp: new Date().toISOString() // Alias
       })
     }).catch(() => { });
   };
@@ -440,6 +456,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         function: 'ESCALATION',
+        action: 'ESCALATION',
         ticket_id: ticketId,
         senior_tech: seniorTech?.name,
         notes: notes
