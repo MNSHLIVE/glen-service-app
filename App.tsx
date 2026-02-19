@@ -55,7 +55,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center font-sans text-glen-blue font-bold">Initializing Pandit Glen...</div>;
+  if (isAppLoading) return <div className="min-h-screen flex items-center justify-center font-sans text-glen-blue font-bold tracking-tight">Initializing {APP_CONFIG.BRANDING.companyName}...</div>;
 
   // New: Handle Public Feedback Route
   const urlParams = new URLSearchParams(window.location.search);

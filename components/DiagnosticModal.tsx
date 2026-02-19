@@ -9,7 +9,7 @@ interface DiagnosticModalProps {
 
 const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
     const { webhookStatus } = useAppContext();
-    const [logs, setLogs] = useState<{msg: string, type: 'info' | 'error' | 'success' | 'code'}[]>([]);
+    const [logs, setLogs] = useState<{ msg: string, type: 'info' | 'error' | 'success' | 'code' }[]>([]);
     const [isSimulating, setIsSimulating] = useState<string | null>(null);
 
     const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'code' = 'info') => {
@@ -18,8 +18,8 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
 
     useEffect(() => {
         const runDiagnostics = async () => {
-            addLog('Initializing Pandit Glen Diagnostics System...', 'info');
-            
+            addLog(`Initializing ${APP_CONFIG.BRANDING.companyName} Diagnostics System...`, 'info');
+
             // Check 1: API Key Presence
             const hasApiKey = !!process.env.API_KEY;
             if (hasApiKey) addLog('✅ Secure API_KEY context detected.', 'success');
@@ -28,10 +28,10 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
             // Check 2: Production Network Reachability
             addLog(`Pinging Hostinger Server: ${APP_CONFIG.MASTER_WEBHOOK_URL.substring(0, 30)}...`, 'info');
             try {
-                const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, { 
-                    method: 'POST', 
-                    body: JSON.stringify({action: 'HEALTH_CHECK'}),
-                    headers: {'Content-Type': 'application/json'}
+                const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'HEALTH_CHECK' }),
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 if (response.ok) addLog('✅ Production automation server responded.', 'success');
                 else addLog(`⚠️ Warning: Server responded with status ${response.status}`, 'error');
@@ -48,10 +48,10 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
     const runSimulation = async (action: string, mockPayload: Record<string, any>) => {
         setIsSimulating(action);
         const fullPayload = { action, ...mockPayload, isSimulation: true };
-        
+
         addLog(`Triggering ${action}... Payload below:`, 'info');
         addLog(JSON.stringify(fullPayload, null, 2), 'code');
-        
+
         try {
             const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
                 method: 'POST',
@@ -77,11 +77,11 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
             <div className="flex justify-between items-center mb-6 border-b border-white/20 pb-4">
                 <div className="flex items-center space-x-3">
                     <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                    <h2 className="text-xl text-white">PanditGlen_Core_v{APP_VERSION}</h2>
+                    <h2 className="text-xl text-white">Platform_Core_v{APP_VERSION}</h2>
                 </div>
                 <button onClick={onClose} className="text-white text-3xl">&times;</button>
             </div>
-            
+
             <div className="flex-grow overflow-y-auto bg-black/50 p-4 border border-white/10 rounded-lg text-sm space-y-2 mb-4 font-mono">
                 {logs.map((log, i) => (
                     <div key={i} className={`
@@ -98,16 +98,16 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
 
             <div className="bg-white/5 p-4 border border-white/10 rounded-lg mb-4">
                 <h3 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">Workflow Simulations</h3>
-                
+
                 <div className="space-y-4">
                     {/* JOB WORKFLOWS */}
                     <div>
                         <p className="text-[10px] text-gray-500 mb-2">Job & Alerts</p>
                         <div className="grid grid-cols-2 gap-2">
-                             <button 
-                                onClick={() => runSimulation('NEW_TICKET', { 
+                            <button
+                                onClick={() => runSimulation('NEW_TICKET', {
                                     ticket: {
-                                        id: `TEST-${Math.floor(Math.random()*1000)}`,
+                                        id: `TEST-${Math.floor(Math.random() * 1000)}`,
                                         customerName: 'Test Customer',
                                         phone: '9999999999',
                                         address: '123 Test St, Simulation City',
@@ -127,10 +127,10 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                                 {isSimulating === 'NEW_TICKET' ? 'Sending...' : '[TEST] New Complaint'}
                             </button>
 
-                            <button 
-                                onClick={() => runSimulation('JOB_COMPLETED', { 
+                            <button
+                                onClick={() => runSimulation('JOB_COMPLETED', {
                                     ticket: {
-                                        id: `TEST-${Math.floor(Math.random()*1000)}`,
+                                        id: `TEST-${Math.floor(Math.random() * 1000)}`,
                                         customerName: 'Test Customer',
                                         status: 'Completed',
                                         workDone: 'Diagnostic Test Completion',
@@ -138,7 +138,7 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                                         paymentStatus: 'Cash',
                                         completedAt: new Date().toISOString(),
                                         technicianId: 'tech1',
-                                        partsReplaced: [] 
+                                        partsReplaced: []
                                     }
                                 })}
                                 disabled={!!isSimulating}
@@ -147,7 +147,7 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                                 {isSimulating === 'JOB_COMPLETED' ? 'Sending...' : '[TEST] Job Completed'}
                             </button>
 
-                             <button 
+                            <button
                                 onClick={() => runSimulation('ATTENDANCE', { technicianId: 'TEST-001', technicianName: 'Simulated User', status: 'Clock In', timestamp: new Date().toISOString() })}
                                 disabled={!!isSimulating}
                                 className="bg-gray-600 hover:bg-gray-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50 col-span-2"
@@ -161,14 +161,14 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
                     <div>
                         <p className="text-[10px] text-gray-500 mb-2">Staff Management (Requires 'Staff' Tab)</p>
                         <div className="grid grid-cols-2 gap-2">
-                             <button 
+                            <button
                                 onClick={() => runSimulation('ADD_TECHNICIAN', { technician: { id: 'TEST-TECH-01', name: 'Simulated Tech', password: '999', points: 0 } })}
                                 disabled={!!isSimulating}
                                 className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
                             >
                                 {isSimulating === 'ADD_TECHNICIAN' ? 'Adding...' : '[TEST] Add Staff'}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => runSimulation('DELETE_TECHNICIAN', { technicianId: 'TEST-TECH-01' })}
                                 disabled={!!isSimulating}
                                 className="bg-red-900 hover:bg-red-800 text-white text-[10px] font-bold py-3 rounded uppercase disabled:opacity-50"
