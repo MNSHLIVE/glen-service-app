@@ -67,7 +67,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     remarks: t.remarks,
     productUpdatedBy: t.product_updated_by,
     productUpdatedAt: t.product_updated_at,
-    jobStartedAt: t.job_started_at
+    jobStartedAt: t.job_started_at,
+    isDeleted: t.is_deleted
   });
 
   const normalizeTechnician = (tech: any) => ({
@@ -195,7 +196,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         technician_id: ticketData.technicianId,
         technician_name: ticketData.technicianName,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        is_deleted: false
       }]);
 
     if (error) {
@@ -242,7 +244,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         remarks: ticket.remarks,
         product_updated_by: ticket.productUpdatedBy,
         product_updated_at: ticket.productUpdatedAt,
-        job_started_at: ticket.jobStartedAt
+        job_started_at: ticket.jobStartedAt,
+        is_deleted: ticket.isDeleted
       })
       .eq('id', ticket.id);
 
