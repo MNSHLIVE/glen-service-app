@@ -10,7 +10,7 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
   const { user, tickets, logout, syncTickets, isSyncing, markAttendance } = useAppContext();
   const [filter, setFilter] = useState<'All' | 'New' | 'InProgress' | 'Completed'>('All');
 
-  const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id);
+  const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id && !ticket.isDeleted);
 
   const filteredTickets = technicianTickets.filter(t => {
     if (filter === 'All') return true;

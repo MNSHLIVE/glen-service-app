@@ -19,6 +19,12 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
   const [serviceCategory, setServiceCategory] = useState(initialData?.serviceCategory || '');
   const [preferredTime, setPreferredTime] = useState('10AM-12PM');
   const [adminNotes, setAdminNotes] = useState('');
+  
+  // Warranty fields
+  const [warrantyApplicable, setWarrantyApplicable] = useState<boolean>(initialData?.warrantyApplicable || false);
+  const [purchaseDate, setPurchaseDate] = useState(initialData?.purchaseDate || '');
+  const [productName, setProductName] = useState(initialData?.productName || '');
+  const [serialNumber, setSerialNumber] = useState(initialData?.serialNumber || '');
 
   useEffect(() => {
     if (technicians.length > 0 && !technicianId) {
@@ -31,6 +37,13 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
     if (!customerName || !phone || !technicianId) {
       alert('Please fill at least Name, Phone, and Assign a Technician');
       return;
+    }
+
+    if (warrantyApplicable) {
+      if (!purchaseDate || !productName || !serialNumber) {
+        alert('Please fill Date of Purchase, Product Name, and Serial Number for warranty claims.');
+        return;
+      }
     }
 
     const ticket_id = 'TKT-' + Date.now();
@@ -50,6 +63,12 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
       serviceCategory,
       preferredTime,
       adminNotes,
+      warrantyApplicable,
+      ...(warrantyApplicable ? {
+        purchaseDate,
+        productName,
+        serialNumber
+      } : {})
     };
 
     addTicket(newTicketData);
@@ -85,6 +104,35 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
                 <option>12PM-03PM</option>
                 <option>03PM-06PM</option>
               </select>
+            </div>
+
+            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={warrantyApplicable} 
+                  onChange={e => setWarrantyApplicable(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-bold text-gray-700">Product Under Warranty</span>
+              </label>
+
+              {warrantyApplicable && (
+                <div className="mt-4 grid grid-cols-1 gap-3 animate-fade-in">
+                  <div>
+                     <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Date of Purchase *</label>
+                     <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="w-full border rounded-xl px-4 py-3 mt-1" required={warrantyApplicable} />
+                  </div>
+                  <div>
+                     <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Product Name *</label>
+                     <input type="text" placeholder="e.g. 60cm Auto Clean Chimney" value={productName} onChange={e => setProductName(e.target.value)} className="w-full border rounded-xl px-4 py-3 mt-1" required={warrantyApplicable} />
+                  </div>
+                  <div>
+                     <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Serial Number *</label>
+                     <input type="text" placeholder="e.g. GLEN-CH-XYZ123" value={serialNumber} onChange={e => setSerialNumber(e.target.value)} className="w-full border rounded-xl px-4 py-3 mt-1" required={warrantyApplicable} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <input placeholder="Complaint Details" value={complaint} onChange={e => setComplaint(e.target.value)} className="w-full border rounded-xl px-4 py-3" />

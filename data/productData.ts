@@ -3,8 +3,8 @@ export const SERVICE_CATEGORIES = [
     'Cook top',
     'Electric kettle',
     'Hob',
+    'Cooking Range',
     'Microwave Oven',
-    'Water Purifier',
     'Other Small Appliance',
 ];
 

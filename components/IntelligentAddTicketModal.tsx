@@ -86,7 +86,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         }
 
         // 2. Category normalization
-        const cats = ['Chimney', 'Cooktop', 'Hob', 'Kettle', 'Dishwasher', 'Microwave', 'Oven', 'OTG', 'Griller'];
+        const cats = ['Chimney', 'Cooktop', 'Cook top', 'Cooking Range', 'Hob', 'Kettle', 'Electric kettle', 'Dishwasher', 'Microwave', 'Microwave Oven', 'Oven', 'OTG', 'Griller'];
         const foundCat = cats.find(c => text.toLowerCase().includes(c.toLowerCase()));
         if (foundCat) {
             if (foundCat === 'OTG' || foundCat === 'Griller') result.serviceCategory = 'Oven' as any;
@@ -139,11 +139,17 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
 
         try {
             console.log("🚀 Starting AI Magic Scan...");
-            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            // Try multiple possible environment variable names
+            const apiKey =
+                import.meta.env.VITE_GEMINI_API_KEY ||
+                // @ts-ignore
+                (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : null) ||
+                // @ts-ignore
+                import.meta.env.GEMINI_API_KEY;
 
-            if (!apiKey) {
-                console.error("❌ Missing VITE_GEMINI_API_KEY");
-                setError("Configuration error: API Key missing.");
+            if (!apiKey || apiKey === 'undefined') {
+                console.error("❌ Missing Gemini API Key in Environment Variables");
+                setError("Configuration Error: Gemini API Key missing. If this is a live site, please ensure VITE_GEMINI_API_KEY is set in your deployment environment (Vercel/Netlify).");
                 setIsLoading(false);
                 return;
             }
@@ -152,7 +158,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
 
             const prompt = `Extract ticket information from the provided text/image.
             Rules:
-            1. Return ONLY a JSON object with: customerName, phone (10 digits only), address, complaint, serviceCategory (Chimney, Cooktop, Hob, Kettle, Dishwasher, Microwave, Oven, Other).
+            1. Return ONLY a JSON object with: customerName, phone (10 digits only), address, complaint, serviceCategory (Chimney, Cook top, Cooking Range, Hob, Electric kettle, Microwave Oven, Other Small Appliance, Other).
             2. VERY IMPORTANT: If the ticket is for a new product or mentions warranty, append "(Under Warranty)" to the complaint.
             3. If a value is unknown, use an empty string.`;
 

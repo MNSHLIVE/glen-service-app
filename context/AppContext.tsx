@@ -59,7 +59,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     serviceChecklist: t.service_checklist,
     adminNotes: t.admin_notes,
     isEscalated: t.is_escalated,
-    completedAt: t.completed_at
+    completedAt: t.completed_at,
+    manualWarrantyStatus: t.manual_warranty_status,
+    billImageUrl: t.bill_image_url,
+    serialNumber: t.serial_number,
+    purchaseDate: t.purchase_date,
+    remarks: t.remarks,
+    productUpdatedBy: t.product_updated_by,
+    productUpdatedAt: t.product_updated_at,
+    jobStartedAt: t.job_started_at
   });
 
   const normalizeTechnician = (tech: any) => ({
@@ -226,7 +234,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         service_checklist: ticket.serviceChecklist,
         admin_notes: ticket.adminNotes,
         technician_id: ticket.technicianId,
-        technician_name: ticket.technicianName
+        technician_name: ticket.technicianName,
+        manual_warranty_status: ticket.manualWarrantyStatus,
+        bill_image_url: ticket.billImageUrl,
+        serial_number: ticket.serialNumber,
+        purchase_date: ticket.purchaseDate,
+        remarks: ticket.remarks,
+        product_updated_by: ticket.productUpdatedBy,
+        product_updated_at: ticket.productUpdatedAt,
+        job_started_at: ticket.jobStartedAt
       })
       .eq('id', ticket.id);
 
@@ -265,7 +281,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           points_awarded: 50,
           parts_used: JSON.stringify(ticket.partsReplaced),
           amc_discussion: ticket.serviceChecklist?.amcDiscussion ? 'Yes' : 'No',
-          free_service: ticket.free_service ? 'Yes' : 'No',
+          free_visit: ticket.freeService ? 'Yes' : 'No',
+          verified_warranty: ticket.manualWarrantyStatus || 'N/A',
+          bill_copy: ticket.billImageUrl || 'N/A',
+          verified_serial: ticket.serialNumber || 'N/A',
+          verified_purchase_date: ticket.purchaseDate || 'N/A',
           ticket: { ...ticket, status: 'Completed' } // Nested fallback
         })
       }).catch(() => { });
@@ -339,32 +359,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const markAttendance = async (status: 'Clock In' | 'Clock Out') => {
     if (!user) return;
-    const { error } = await supabase
-      .from('attendance')
-      .insert([{
-        technician_id: user.id,
-        technician_name: user.name,
-        status,
-        timestamp: new Date().toISOString()
-      }]);
+    try {
+      const { error } = await supabase
+        .from('attendance')
+        .insert([{
+          technician_id: user.id,
+          technician_name: user.name,
+          status,
+          timestamp: new Date().toISOString()
+        }]);
 
-    if (error) throw error;
+      if (error) throw error;
+      alert(`✅ ${status} Successful!`);
 
-    // Sync to n8n/Google Sheets
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ATTENDANCE',
-        action: 'ATTENDANCE',
-        type: status === 'Clock In' ? 'IN' : 'OUT',
-        technician_id: user.id,
-        technician_name: user.name,
-        status: status, // Include both type and status
-        time: new Date().toISOString(),
-        timestamp: new Date().toISOString() // Alias
-      })
-    }).catch(() => { });
+      // Sync to n8n/Google Sheets
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          function: 'ATTENDANCE',
+          action: 'ATTENDANCE',
+          type: status === 'Clock In' ? 'IN' : 'OUT',
+          technician_id: user.id,
+          technician_name: user.name,
+          status: status, // Include both type and status
+          time: new Date().toISOString(),
+          timestamp: new Date().toISOString() // Alias
+        })
+      }).catch(() => { });
+    } catch (err: any) {
+      console.error("❌ Attendance Error:", err);
+      alert("⚠️ Attendance Failed: " + (err.message || "Unknown error"));
+    }
   };
 
   const sendHeartbeat = async () => {

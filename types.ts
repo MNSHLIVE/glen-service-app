@@ -114,8 +114,17 @@ export interface Ticket {
   partsReplaced?: ReplacedPart[];
   pointsAwarded?: boolean;
   freeService?: boolean;
+  manualWarrantyStatus?: 'Under' | 'Over';
+  billImageUrl?: string;
+  productUpdatedBy?: string;
+  productUpdatedAt?: string | Date;
+  jobStartedAt?: string | Date;
   adminNotes?: string;
   isEscalated?: boolean; // New: Tracks if a job was re-opened due to dissatisfaction
+  isDeleted?: boolean; // Soft delete
+  productName?: string;
+  serialNumber?: string;
+  rescheduledDate?: string;
 }
 
 export interface Feedback {

@@ -30,6 +30,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
 
     const filteredTickets = useMemo(() => {
         return tickets.filter(t => {
+            if (t.isDeleted) return false;
             // Keep completed tickets filtered by date
             if (t.status === TicketStatus.Completed) {
                 return isToday(t.completedAt);
@@ -117,7 +118,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                 </div>
                 <div className="bg-red-50 p-3 rounded-2xl shadow-sm border border-red-100 text-center transition-transform hover:scale-105 col-span-1 mt-2">
                     <p className="text-[10px] font-bold text-red-600 uppercase mb-1">Escalated</p>
-                    <p className="text-2xl font-black text-red-800">{tickets.filter(t => t.isEscalated && t.status !== TicketStatus.Completed).length}</p>
+                    <p className="text-2xl font-black text-red-800">{tickets.filter(t => t.isEscalated && t.status !== TicketStatus.Completed && !t.isDeleted).length}</p>
                 </div>
             </div>
 

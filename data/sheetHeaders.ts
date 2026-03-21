@@ -36,7 +36,7 @@ export const TECHNICIAN_UPDATE_HEADERS = [
   'Points Awarded',
   'Parts Replaced (Name | Price | Warranty)',
   'AMC Discussion',
-  'Free Service'
+  'FREE VISIT'
 ];
 
 // Tab 3: "Attendance"

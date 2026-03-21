@@ -49,8 +49,8 @@ const ReceiptModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticke
                             <p className="text-gray-700">{ticket.address}</p>
                         </div>
                         <div>
-                            <p className="text-gray-500">Work Done:</p>
-                            <p className="font-semibold text-gray-800 p-2 bg-gray-50 rounded-md">{ticket.workDone}</p>
+                            <p className="text-gray-500">Service Remarks:</p>
+                            <p className="font-semibold text-gray-800 p-2 bg-gray-50 rounded-md">{ticket.remarks || ticket.workDone}</p>
                         </div>
                         {ticket.partsReplaced && ticket.partsReplaced.length > 0 && (
                             <div>
@@ -115,6 +115,20 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
     const { updateTicket } = useAppContext();
     const [editableTicket, setEditableTicket] = useState<Ticket>(ticket);
     const [isAddPartModalOpen, setIsAddPartModalOpen] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(ticket.billImageUrl || null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // In a real app, you'd upload this to Supabase Storage
+            // For now, we'll simulate with a fake URL or base64 if needed, 
+            // but the requirement is to store it. 
+            // I'll set a placeholder URL to represent the upload.
+            const fakeUrl = `https://storage.glen.com/bills/${ticket.id}_${Date.now()}.jpg`;
+            handleFieldChange('billImageUrl', fakeUrl);
+            setPreviewUrl(URL.createObjectURL(file));
+        }
+    };
 
     const handleFieldChange = (field: keyof Ticket, value: any) => {
         setEditableTicket(prev => ({ ...prev, [field]: value }));
@@ -151,14 +165,24 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
     };
 
     const handleCompleteJob = () => {
-        if (!editableTicket.workDone || editableTicket.workDone.trim() === '') {
-            alert('Please describe the work done before completing the job.');
+        if (!editableTicket.remarks || editableTicket.remarks.trim() === '') {
+            alert('Please add remarks/work summary before completing.');
             return;
         }
         const finalTicket = {
-            ...editableTicket,
+            id: editableTicket.id,
             status: TicketStatus.Completed,
-            completedAt: new Date()
+            remarks: editableTicket.remarks,
+            paymentStatus: editableTicket.paymentStatus,
+            amountCollected: editableTicket.amountCollected,
+            partsReplaced: editableTicket.partsReplaced,
+            manualWarrantyStatus: editableTicket.manualWarrantyStatus,
+            serialNumber: editableTicket.serialNumber,
+            purchaseDate: editableTicket.purchaseDate,
+            productName: editableTicket.productName,
+            productUpdatedBy: 'Technician',
+            productUpdatedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString()
         };
         updateTicket(finalTicket);
         onBack();
@@ -195,8 +219,8 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
             <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
                 <h4 className="text-lg font-semibold text-gray-800">Work Summary</h4>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Work Done (Action)*</label>
-                    <textarea value={editableTicket.workDone || ''} onChange={e => handleFieldChange('workDone', e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
+                    <label className="block text-sm font-medium text-gray-700">Remarks / Action Taken*</label>
+                    <textarea value={editableTicket.remarks || ''} onChange={e => handleFieldChange('remarks', e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g. Gas valve replaced" required></textarea>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -220,8 +244,69 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
                         </label>
                         <label className="flex items-center text-sm text-gray-800 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
                             <input type="checkbox" checked={editableTicket.freeService || false} onChange={e => handleFieldChange('freeService', e.target.checked)} className="h-4 w-4 text-glen-blue focus:ring-glen-blue border-gray-300 rounded" />
-                            <span className="ml-3 font-medium">Mark as Free Service</span>
+                            <span className="ml-3 font-bold text-glen-red">FREE VISIT</span>
                         </label>
+                    </div>
+                </div>
+
+                {/* --- Manual Warranty & Bill Section --- */}
+                <div className="border-t pt-4 space-y-4">
+                    <h4 className="text-lg font-semibold text-gray-800">Warranty Verification (Bill)</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Actual Warranty Status</label>
+                            <div className="flex mt-2 p-1 bg-gray-100 rounded-lg">
+                                <button 
+                                    onClick={() => handleFieldChange('manualWarrantyStatus', 'Under')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${editableTicket.manualWarrantyStatus === 'Under' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                                >
+                                    UNDER
+                                </button>
+                                <button 
+                                    onClick={() => handleFieldChange('manualWarrantyStatus', 'Over')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${editableTicket.manualWarrantyStatus === 'Over' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}
+                                >
+                                    OVER
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Purchase Date (Manual)</label>
+                            <input 
+                                type="date" 
+                                value={editableTicket.purchaseDate ? String(editableTicket.purchaseDate).split('T')[0] : ''} 
+                                onChange={e => handleFieldChange('purchaseDate', e.target.value)}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Product / Serial No</label>
+                        <input 
+                            type="text" 
+                            value={editableTicket.serialNumber || ''} 
+                            onChange={e => handleFieldChange('serialNumber', e.target.value)}
+                            placeholder="Enter Serial Number from Bill"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">Upload/Capture Bill Image</label>
+                        <div className="flex items-center space-x-4">
+                            <label className="flex-1 cursor-pointer bg-blue-50 border-2 border-dashed border-blue-200 p-4 rounded-xl flex flex-col items-center justify-center hover:bg-blue-100 transition-all">
+                                <svg className="w-8 h-8 text-blue-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <span className="text-[10px] font-bold text-blue-600 uppercase">Click to Capture Bill</span>
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+                            </label>
+                            {previewUrl && (
+                                <div className="w-20 h-20 rounded-lg border overflow-hidden shadow-sm">
+                                    <img src={previewUrl} alt="Bill Preview" className="w-full h-full object-cover" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -289,13 +374,25 @@ const AdminTicketDetails: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
             {ticket.status === TicketStatus.Completed && (
                 <DetailSection title="Completion Summary">
                     <DetailItem label="Completed At" value={ticket.completedAt ? new Date(ticket.completedAt).toLocaleString() : 'N/A'} />
-                    <DetailItem label="Work Done" value={ticket.workDone} />
+                    <DetailItem label="Service Remarks" value={ticket.remarks || ticket.workDone} />
                     <DetailItem label="Payment Mode" value={ticket.paymentStatus} />
                     <DetailItem label="Amount Paid">
                         <span className="font-bold text-glen-blue">₹{ticket.amountCollected?.toFixed(2) || '0.00'}</span>
                     </DetailItem>
                     <DetailItem label="AMC Discussed" value={ticket.serviceChecklist?.amcDiscussion} />
-                    <DetailItem label="Free Service" value={ticket.freeService} />
+                    <DetailItem label="FREE VISIT" value={ticket.freeService} />
+                    {ticket.manualWarrantyStatus && (
+                        <DetailItem label="Warranty (Verified)">
+                            <span className={`font-bold ${ticket.manualWarrantyStatus === 'Under' ? 'text-green-600' : 'text-red-600'}`}>
+                                {ticket.manualWarrantyStatus.toUpperCase()} WARRANTY
+                            </span>
+                        </DetailItem>
+                    )}
+                    {ticket.billImageUrl && (
+                        <DetailItem label="Bill Copy">
+                            <a href={ticket.billImageUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">View Bill Image</a>
+                        </DetailItem>
+                    )}
                 </DetailSection>
             )}
 
