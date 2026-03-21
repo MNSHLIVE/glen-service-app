@@ -281,7 +281,8 @@ const TechnicianJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) =>
                 manualWarrantyStatus: localTicket.manualWarrantyStatus,
                 remarks: localTicket.remarks,
                 productUpdatedBy: 'Technician',
-                productUpdatedAt: new Date().toISOString()
+                productUpdatedAt: new Date().toISOString(),
+                technicianId: ticket.technicianId
             };
 
             if (newStatus === TicketStatus.Completed) {

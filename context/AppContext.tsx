@@ -256,7 +256,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (ticket.status === 'Completed' && !ticket.completedAt) {
       // Award 50 points to technician on first-time completion
-      const currentTech = technicians.find(tech => tech.id === ticket.technicianId);
+      const targetTechId = ticket.technicianId || tickets.find(t => t.id === ticket.id)?.technicianId;
+      if (!targetTechId) {
+        console.warn("⚠️ Point Award Failed: technicianId not found for ticket:", ticket.id);
+        await loadTickets();
+        return;
+      }
+      const currentTech = technicians.find(tech => tech.id === targetTechId);
       const newPoints = (currentTech?.points || 0) + 50;
 
       await supabase
