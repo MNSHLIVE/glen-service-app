@@ -67,8 +67,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     remarks: t.remarks,
     productUpdatedBy: t.product_updated_by,
     productUpdatedAt: t.product_updated_at,
-    jobStartedAt: t.job_started_at,
-    isDeleted: t.is_deleted
+    jobStartedAt: t.job_started_at
   });
 
   const normalizeTechnician = (tech: any) => ({
