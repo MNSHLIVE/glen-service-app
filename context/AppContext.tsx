@@ -196,8 +196,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         technician_id: ticketData.technicianId,
         technician_name: ticketData.technicianName,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        is_deleted: false
+        created_at: new Date().toISOString()
       }]);
 
     if (error) {
@@ -244,8 +243,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         remarks: ticket.remarks,
         product_updated_by: ticket.productUpdatedBy,
         product_updated_at: ticket.productUpdatedAt,
-        job_started_at: ticket.jobStartedAt,
-        is_deleted: ticket.isDeleted
+        job_started_at: ticket.jobStartedAt
       })
       .eq('id', ticket.id);
 
@@ -257,20 +255,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (ticket.status === 'Completed' && !ticket.completedAt) {
       // Award 50 points to technician on first-time completion
       const targetTechId = ticket.technicianId || tickets.find(t => t.id === ticket.id)?.technicianId;
-      if (!targetTechId) {
-        console.warn("⚠️ Point Award Failed: technicianId not found for ticket:", ticket.id);
-        await loadTickets();
-        return;
+      if (targetTechId) {
+        const currentTech = technicians.find(tech => tech.id === targetTechId);
+        const newPoints = (currentTech?.points || 0) + 50;
+
+        await supabase
+          .from('technicians')
+          .update({ points: newPoints })
+          .eq('id', targetTechId);
+
+        await loadTechnicians();
+      } else {
+        console.warn("⚠️ Point Award Skipped: technicianId not found for ticket:", ticket.id);
       }
-      const currentTech = technicians.find(tech => tech.id === targetTechId);
-      const newPoints = (currentTech?.points || 0) + 50;
-
-      await supabase
-        .from('technicians')
-        .update({ points: newPoints })
-        .eq('id', ticket.technicianId);
-
-      await loadTechnicians();
 
       // Trigger n8n for Invoice & Google Sheets (Async)
       fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {

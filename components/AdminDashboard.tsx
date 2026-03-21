@@ -30,7 +30,6 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
 
     const filteredTickets = useMemo(() => {
         return tickets.filter(t => {
-            if (t.isDeleted) return false;
             // Keep completed tickets filtered by date
             if (t.status === TicketStatus.Completed) {
                 return isToday(t.completedAt);

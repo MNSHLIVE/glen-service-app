@@ -142,11 +142,6 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
         }
     };
 
-    const handleDelete = () => {
-        if (window.confirm("Are you sure you want to delete this ticket?")) {
-            updateTicket({ ...ticket, isDeleted: true });
-        }
-    };
 
     const handleAssign = () => {
         const newTechId = technicians.find(t => t.id !== ticket.technicianId)?.id || ticket.technicianId;
@@ -224,7 +219,6 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
                             </button>
                         )}
                         <button onClick={() => setIsEscalateModalOpen(true)} className="flex-1 min-w-[80px] bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition-colors text-[10px] uppercase">Escalate</button>
-                        <button onClick={handleDelete} className="flex-1 min-w-[80px] bg-red-50 text-red-600 font-bold py-2 rounded-lg hover:bg-red-100 transition-colors text-[10px] uppercase">Delete</button>
                     </div>
                 </div>
             </div>

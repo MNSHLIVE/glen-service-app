@@ -10,7 +10,7 @@ interface ViewJobsProps {
 
 const ViewJobs: React.FC<ViewJobsProps> = ({ onViewTicket, filteredTickets }) => {
   const { tickets: contextTickets } = useAppContext();
-  const displayTickets = (filteredTickets || contextTickets).filter((t: any) => !t.isDeleted);
+  const displayTickets = (filteredTickets || contextTickets);
 
   return (
     <div>
