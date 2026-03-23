@@ -64,6 +64,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     billImageUrl: t.bill_image_url,
     serialNumber: t.serial_number,
     purchaseDate: t.purchase_date,
+    productName: t.product_name,
+    warrantyApplicable: t.warranty_applicable,
     remarks: t.remarks,
     productUpdatedBy: t.product_updated_by,
     productUpdatedAt: t.product_updated_at,
@@ -195,6 +197,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         technician_id: ticketData.technicianId,
         technician_name: ticketData.technicianName,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
+        serial_number: ticketData.serialNumber,
+        purchase_date: ticketData.purchaseDate,
+        product_name: ticketData.productName,
+        warranty_applicable: ticketData.warrantyApplicable,
         created_at: new Date().toISOString()
       }]);
 
@@ -242,6 +248,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         remarks: ticket.remarks,
         product_updated_by: ticket.productUpdatedBy,
         product_updated_at: ticket.productUpdatedAt,
+        product_name: ticket.productName,
+        warranty_applicable: ticket.warrantyApplicable,
         job_started_at: ticket.jobStartedAt
       })
       .eq('id', ticket.id);
