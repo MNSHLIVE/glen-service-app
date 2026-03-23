@@ -60,14 +60,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     adminNotes: t.admin_notes,
     isEscalated: t.is_escalated,
     completedAt: t.completed_at,
-    manualWarrantyStatus: t.manual_warranty_status,
-    billImageUrl: t.bill_image_url,
-    serialNumber: t.serial_number,
-    purchaseDate: t.purchase_date,
-    productName: t.product_name,
-    warrantyApplicable: t.warranty_applicable,
-    remarks: t.remarks,
-    productUpdatedBy: t.product_updated_by,
+    remarks: t.work_done, // Use work_done as the remarks source
     productUpdatedAt: t.product_updated_at,
     jobStartedAt: t.job_started_at
   });
@@ -197,10 +190,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         technician_id: ticketData.technicianId,
         technician_name: ticketData.technicianName,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
-        serial_number: ticketData.serialNumber,
-        purchase_date: ticketData.purchaseDate,
-        product_name: ticketData.productName,
-        warranty_applicable: ticketData.warrantyApplicable,
         created_at: new Date().toISOString()
       }]);
 
@@ -232,8 +221,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .from('tickets')
       .update({
         status: ticket.status,
-        completed_at: ticket.status === 'Completed' ? new Date().toISOString() : ticket.completed_at,
-        work_done: ticket.workDone,
         amount_collected: ticket.amountCollected,
         payment_method: ticket.paymentStatus || ticket.paymentMethod,
         parts_replaced: ticket.partsReplaced,
@@ -241,16 +228,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         admin_notes: ticket.adminNotes,
         technician_id: ticket.technicianId,
         technician_name: ticket.technicianName,
-        manual_warranty_status: ticket.manualWarrantyStatus,
-        bill_image_url: ticket.billImageUrl,
-        serial_number: ticket.serialNumber,
-        purchase_date: ticket.purchaseDate,
-        remarks: ticket.remarks,
-        product_updated_by: ticket.productUpdatedBy,
-        product_updated_at: ticket.productUpdatedAt,
-        product_name: ticket.productName,
-        warranty_applicable: ticket.warrantyApplicable,
-        job_started_at: ticket.jobStartedAt
+        work_done: ticket.remarks || ticket.workDone,
+        completed_at: ticket.status === 'Completed' ? new Date().toISOString() : ticket.completed_at
       })
       .eq('id', ticket.id);
 
