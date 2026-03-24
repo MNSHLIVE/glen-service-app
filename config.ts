@@ -4,7 +4,7 @@
 // ============================================================================
 // Your Pandit-Glen production configuration
 
-export const APP_VERSION = '4.6.6';
+export const APP_VERSION = '4.6.7';
 
 export const APP_CONFIG = {
     // 1. The Webhook URL from your n8n "Webhook" node (via Vercel proxy)
