@@ -13,6 +13,8 @@ export const COMPLAINT_SHEET_HEADERS = [
   'Service Category',
   'Complaint',
   'Assigned Technician',
+  'Product Name',
+  'Serial Number',
   'Status',
   'Admin Notes'
 ];
@@ -31,12 +33,25 @@ export const TECHNICIAN_UPDATE_HEADERS = [
   'Completed At',
   'Technician Name',
   'Work Done Summary',
+  'Product Name',
+  'Serial Number',
   'Amount Collected',
+  'Amount Pending',
   'Payment Status',
   'Points Awarded',
   'Parts Replaced (Name | Price | Warranty)',
+  'Verified Warranty Status',
+  'Verified Serial Number',
+  'Verified Purchase Date',
   'AMC Discussion',
   'FREE VISIT'
+];
+
+// Tab 6: "Dashboard" (Summary Data)
+export const DASHBOARD_HEADERS = [
+  'Metric Name',
+  'Value',
+  'Last Updated'
 ];
 
 // Tab 3: "Attendance"

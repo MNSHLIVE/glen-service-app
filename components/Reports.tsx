@@ -160,6 +160,7 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
             remarks: editableTicket.remarks,
             paymentStatus: editableTicket.paymentStatus,
             amountCollected: editableTicket.amountCollected,
+            amountPending: editableTicket.amountPending || 0,
             partsReplaced: editableTicket.partsReplaced,
             manualWarrantyStatus: editableTicket.manualWarrantyStatus,
             serialNumber: editableTicket.serialNumber,
@@ -221,8 +222,14 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Amount</label>
+                        <label className="block text-sm font-medium text-gray-700">Amount Collected</label>
                         <input type="number" value={editableTicket.amountCollected || ''} onChange={e => handleFieldChange('amountCollected', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="e.g., 500" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Amount Pending (if any)</label>
+                        <input type="number" value={editableTicket.amountPending || ''} onChange={e => handleFieldChange('amountPending', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="e.g., 200" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
                     </div>
                 </div>
                 {/* --- Final Checklist --- */}
@@ -240,7 +247,26 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
                     </div>
                 </div>
 
-                {/* --- Manual Warranty & Bill Section --- */}
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Warranty Status</label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                type="button"
+                                onClick={() => handleFieldChange('manualWarrantyStatus', 'Under')}
+                                className={`py-2 px-4 rounded-lg font-bold border-2 transition-all ${editableTicket.manualWarrantyStatus === 'Under' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-white border-gray-200 text-gray-400'}`}
+                            >
+                                UNDER<br/>WARRANTY
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleFieldChange('manualWarrantyStatus', 'Over')}
+                                className={`py-2 px-4 rounded-lg font-bold border-2 transition-all ${editableTicket.manualWarrantyStatus === 'Over' ? 'bg-red-100 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-400'}`}
+                            >
+                                OUT OF<br/>WARRANTY
+                            </button>
+                        </div>
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Product / Serial No</label>
                         <input 

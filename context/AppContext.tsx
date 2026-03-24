@@ -60,6 +60,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     adminNotes: t.admin_notes,
     isEscalated: t.is_escalated,
     completedAt: t.completed_at,
+    manualWarrantyStatus: t.manual_warranty_status,
+    serialNumber: t.serial_number,
+    purchaseDate: t.purchase_date,
+    productName: t.product_name,
+    warrantyApplicable: t.warranty_applicable,
     remarks: t.work_done, // Use work_done as the remarks source
     productUpdatedAt: t.product_updated_at,
     jobStartedAt: t.job_started_at
@@ -189,6 +194,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         preferred_time: ticketData.preferredTime,
         technician_id: ticketData.technicianId,
         technician_name: ticketData.technicianName,
+        product_name: ticketData.productName,
+        serial_number: ticketData.serialNumber,
+        purchase_date: ticketData.purchaseDate,
+        warranty_applicable: ticketData.warrantyApplicable,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
         created_at: new Date().toISOString()
       }]);
@@ -228,6 +237,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         admin_notes: ticket.adminNotes,
         technician_id: ticket.technicianId,
         technician_name: ticket.technicianName,
+        product_name: ticket.productName,
+        serial_number: ticket.serialNumber,
+        purchase_date: ticket.purchaseDate,
+        warranty_applicable: ticket.warrantyApplicable,
+        manual_warranty_status: ticket.manualWarrantyStatus,
         work_done: ticket.remarks || ticket.workDone,
         completed_at: ticket.status === 'Completed' ? new Date().toISOString() : ticket.completed_at
       })
@@ -269,6 +283,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           customer_name: ticket.customerName,
           work_done_summary: ticket.workDone,
           amount_collected: ticket.amountCollected,
+          amount_pending: ticket.amountPending || 0,
           payment_status: ticket.paymentStatus || ticket.paymentMethod,
           points_awarded: 50,
           parts_used: JSON.stringify(ticket.partsReplaced),
