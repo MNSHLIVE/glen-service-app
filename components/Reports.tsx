@@ -278,6 +278,7 @@ const TechnicianUpdateView: React.FC<{ ticket: Ticket, onBack: () => void }> = (
                         />
                     </div>
                 </div>
+            </div>
 
             <div className="pt-4">
                 <button type="button" onClick={handleCompleteJob} className="w-full bg-green-500 text-white font-bold py-4 px-6 rounded-lg hover:bg-green-600 transition-colors text-lg shadow-lg">

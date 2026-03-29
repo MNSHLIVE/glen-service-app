@@ -4,6 +4,7 @@ import AddTicketModal from './AddTicketModal';
 import ViewJobs from './ViewJobs';
 import TechnicianRatings from './TechnicianRatings';
 import IntelligentAddTicketModal from './IntelligentAddTicketModal';
+import AIScannerModal from './AIScannerModal';
 import SettingsModal from './SettingsModal';
 import PerformanceView from './PerformanceView';
 import { TicketStatus } from '../types';
@@ -13,6 +14,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
     const [activeView, setActiveView] = useState('jobs');
     const [showManual, setShowManual] = useState(false);
     const [showIntel, setShowIntel] = useState(false);
+    const [showAIScanner, setShowAIScanner] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [parsedData, setParsedData] = useState<any>(null);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -29,16 +31,28 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
     }, [technicians]);
 
     const filteredTickets = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isViewingToday = selectedDate === todayStr;
+
         return tickets.filter(t => {
-            // Keep completed tickets filtered by date
+            if (t.isDeleted) return false;
+
+            // Handle completed tickets: only show on the specific date they were completed
             if (t.status === TicketStatus.Completed) {
                 return isToday(t.completedAt);
             }
-            // Keep escalated tickets ALWAYS visible if they are not completed
+
+            // Always show escalated tickets if they are not completed
             if (t.isEscalated && t.status !== TicketStatus.Completed) {
                 return true;
             }
-            // All other tickets (New/InProgress) filter by creation date
+
+            // If viewing TODAY, show all Pending and New tickets regardless of when they were created
+            if (isViewingToday && (t.status === TicketStatus.New || t.status === TicketStatus.InProgress)) {
+                return true;
+            }
+
+            // For any other view (e.g. historical), show based on creation date
             return isToday(t.createdAt);
         });
     }, [tickets, selectedDate]);
@@ -128,14 +142,21 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                         {isSyncing ? 'Syncing Staff & Jobs...' : 'Refresh Server Data'}
                     </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-3">
+                    <button onClick={() => setShowAIScanner(true)} className="flex flex-col items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-4 rounded-3xl font-bold shadow-lg active:scale-95 transition-all">
+                        <span className="text-lg mb-0.5">📷</span>
+                        <span className="text-[11px] font-bold">AI Scanner</span>
+                        <span className="text-[9px] opacity-70">Image → Ticket</span>
+                    </button>
                     <button onClick={() => setShowIntel(true)} className="flex flex-col items-center justify-center bg-indigo-600 text-white p-4 rounded-3xl font-bold shadow-lg active:scale-95 transition-all">
-                        <span className="text-sm mb-1">AI Magic Scan</span>
-                        <span className="text-[10px] opacity-70">Paste from WhatsApp</span>
+                        <span className="text-lg mb-0.5">✨</span>
+                        <span className="text-[11px] font-bold">AI Text</span>
+                        <span className="text-[9px] opacity-70">Paste Text</span>
                     </button>
                     <button onClick={() => setShowManual(true)} className="flex flex-col items-center justify-center bg-blue-600 text-white p-4 rounded-3xl font-bold shadow-lg active:scale-95 transition-all">
-                        <span className="text-sm mb-1">New Ticket</span>
-                        <span className="text-[10px] opacity-70">Manual Entry</span>
+                        <span className="text-lg mb-0.5">✏️</span>
+                        <span className="text-[11px] font-bold">New Ticket</span>
+                        <span className="text-[9px] opacity-70">Manual</span>
                     </button>
                 </div>
             </div>
@@ -167,6 +188,14 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                         setParsedData(data);
                         setShowIntel(false);
                         setShowManual(true);
+                    }}
+                />
+            )}
+            {showAIScanner && (
+                <AIScannerModal
+                    onClose={() => setShowAIScanner(false)}
+                    onTicketCreated={() => {
+                        syncTickets(); // Refresh dashboard immediately
                     }}
                 />
             )}

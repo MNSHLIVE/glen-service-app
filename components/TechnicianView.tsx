@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
+import { TicketStatus } from '../types';
 import JobCard from './JobCard';
 
 interface TechnicianViewProps {
@@ -10,7 +11,22 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
   const { user, tickets, logout, syncTickets, isSyncing, markAttendance } = useAppContext();
   const [filter, setFilter] = useState<'All' | 'New' | 'InProgress' | 'Completed'>('All');
 
-  const technicianTickets = tickets.filter(ticket => ticket.technicianId === user?.id && !ticket.isDeleted);
+  const technicianTickets = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return tickets.filter(t => {
+      if (t.technicianId !== user?.id || t.isDeleted) return false;
+
+      // Handle completed tickets: only show if completed TODAY
+      if (t.status === TicketStatus.Completed) {
+        if (!t.completedAt) return false;
+        const completedDate = new Date(t.completedAt).toISOString().split('T')[0];
+        return completedDate === today;
+      }
+
+      // Show all other non-deleted statuses (New, InProgress, etc.) regardless of date
+      return true;
+    });
+  }, [tickets, user?.id]);
 
   const filteredTickets = technicianTickets.filter(t => {
     if (filter === 'All') return true;
