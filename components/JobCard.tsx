@@ -116,6 +116,54 @@ const EscalateModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ tick
     );
 };
 
+const ReassignTicketModal: React.FC<{ ticket: Ticket, onClose: () => void }> = ({ ticket, onClose }) => {
+    const { technicians, updateTicket } = useAppContext();
+    const [techId, setTechId] = useState(ticket.technicianId);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const tech = technicians.find(t => t.id === techId);
+        if (tech) {
+            updateTicket({ ...ticket, technicianId: techId, technicianName: tech.name });
+            onClose();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+                <div className="bg-blue-600 p-4 flex justify-between items-center text-white">
+                    <h3 className="text-lg font-bold uppercase tracking-wider">Reassign Ticket</h3>
+                    <button onClick={onClose} className="text-2xl">&times;</button>
+                </div>
+                <div className="p-6 space-y-5">
+                    <div className="bg-blue-50 p-3 rounded-lg text-blue-800 text-[10px] font-bold uppercase">
+                        Select new service technician for this job:
+                    </div>
+                    <div>
+                        <select
+                            value={techId}
+                            onChange={e => setTechId(e.target.value)}
+                            className="w-full p-3 border-2 border-gray-100 rounded-xl text-sm font-bold bg-gray-50 focus:border-blue-500 outline-none"
+                        >
+                            {technicians.map(t => (
+                                <option key={t.id} value={t.id}>{t.name} {t.id === ticket.technicianId ? '(Current)' : ''}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button
+                        onClick={handleSubmit}
+                        className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg active:scale-95"
+                    >
+                        CONFIRM REASSIGNMENT
+                    </button>
+                    <button onClick={onClose} className="w-full text-gray-400 font-bold text-xs uppercase hover:text-gray-600">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const JobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
     const { user } = useAppContext();
 
@@ -130,7 +178,8 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const { technicians, updateTicket, feedback, sendReceipt } = useAppContext();
+    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+    const { technicians, updateTicket, deleteTicket, feedback, sendReceipt } = useAppContext();
 
     const technician = technicians.find(t => t.id === ticket.technicianId);
     const ticketFeedback = feedback.find(fb => fb.ticketId === ticket.id);
@@ -144,10 +193,11 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
 
 
     const handleAssign = () => {
-        const newTechId = technicians.find(t => t.id !== ticket.technicianId)?.id || ticket.technicianId;
-        if (window.confirm(`Re-assign this ticket to another technician?`)) {
-            updateTicket({ ...ticket, technicianId: newTechId });
-        }
+        setIsReassignModalOpen(true);
+    };
+
+    const handleDelete = () => {
+       deleteTicket(ticket.id);
     };
 
     return (
@@ -221,12 +271,18 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
                             </button>
                         )}
                         <button onClick={() => setIsEscalateModalOpen(true)} className="flex-1 min-w-[80px] bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition-colors text-[10px] uppercase">Escalate</button>
+                        <button onClick={handleDelete} className="bg-red-50 text-red-600 font-bold w-10 flex items-center justify-center rounded-lg hover:bg-red-100 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
             {isUpdateModalOpen && <UpdateStatusModal ticket={ticket} onClose={() => setIsUpdateModalOpen(false)} />}
             {isEscalateModalOpen && <EscalateModal ticket={ticket} onClose={() => setIsEscalateModalOpen(false)} />}
             {isEditModalOpen && <EditTicketModal ticket={ticket} onClose={() => setIsEditModalOpen(false)} />}
+            {isReassignModalOpen && <ReassignTicketModal ticket={ticket} onClose={() => setIsReassignModalOpen(false)} />}
         </>
     )
 }

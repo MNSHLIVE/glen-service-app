@@ -30,6 +30,7 @@ interface AppContextType {
   resetAllTechnicianPoints: () => Promise<void>;
   sendReceipt: (ticketId: string) => Promise<void>;
   reopenTicket: (ticketId: string, seniorTechId: string, notes: string) => Promise<void>;
+  deleteTicket: (ticketId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -499,6 +500,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await syncTickets();
   };
 
+  const deleteTicket = async (ticketId: string) => {
+    console.log("🗑️ Supabase: Soft Deleting Ticket:", ticketId);
+    
+    // Check if user confirmed
+    if (!window.confirm("Are you sure you want to PERMANENTLY delete this ticket from the dashboard?")) return;
+
+    const { error } = await supabase
+      .from('tickets')
+      .update({ is_deleted: true })
+      .eq('id', ticketId);
+
+    if (error) {
+      console.error("❌ Delete Error:", error);
+      alert("Failed to delete ticket: " + error.message);
+      return;
+    }
+
+    // Optional: Sync to n8n for audit log
+    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        function: 'DELETE_TICKET',
+        action: 'DELETE_TICKET',
+        ticket_id: ticketId,
+        deleted_at: new Date().toISOString()
+      })
+    }).catch(() => { });
+
+    await loadTickets();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -521,6 +554,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addFeedback,
         sendReceipt,
         reopenTicket,
+        deleteTicket,
       }}
     >
       {children}
