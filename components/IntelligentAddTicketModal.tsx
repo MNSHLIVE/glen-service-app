@@ -217,11 +217,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                 contents: [{
                     role: 'user',
                     parts: parts
-                }],
-                // @ts-ignore
-                generationConfig: {
-                    responseMimeType: "application/json",
-                }
+                }]
             });
 
             console.log("✅ AI Response received");
@@ -248,7 +244,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             }
 
             // Enforce warranty-only rule for specific fields
-            if (!parsedData.warrantyApplicable) {
+            if (parsedData.warrantyApplicable === false || !parsedData.warrantyApplicable) {
                 delete parsedData.productName;
                 delete parsedData.serialNumber;
                 delete parsedData.purchaseDate;

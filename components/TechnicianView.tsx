@@ -16,11 +16,9 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
     return tickets.filter(t => {
       if (t.technicianId !== user?.id || t.isDeleted) return false;
 
-      // Handle completed tickets: only show if completed TODAY
+      // Rule: Completed jobs should NOT be seen in the technician screen (requested by user)
       if (t.status === TicketStatus.Completed) {
-        if (!t.completedAt) return false;
-        const completedDate = new Date(t.completedAt).toISOString().split('T')[0];
-        return completedDate === today;
+        return false;
       }
 
       // Show all other non-deleted statuses (New, InProgress, etc.) regardless of date
@@ -73,7 +71,7 @@ const TechnicianView: React.FC<TechnicianViewProps> = ({ onViewTicket }) => {
       </div>
 
       <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
-        {['All', 'New', 'InProgress', 'Completed'].map(f => (
+        {['All', 'New', 'InProgress'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f as any)}
