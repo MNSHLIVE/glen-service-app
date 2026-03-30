@@ -4,9 +4,9 @@ import { useAppContext } from '../context/AppContext';
 import { UserRole } from '../types';
 import { APP_CONFIG } from '../config';
 
-// Technicians & Lower roles use PINs
-const CONTROLLER_PIN = '555';
-const COORDINATOR_PIN = '777';
+// Technicians & Lower roles use PINs - Moved to .env for better security
+const CONTROLLER_PIN = import.meta.env.VITE_CONTROLLER_PIN || '2525';
+const COORDINATOR_PIN = import.meta.env.VITE_COORDINATOR_PIN || '7575';
 
 // Default Fallback Credentials
 const DEFAULT_CREDENTIALS = {
@@ -159,15 +159,14 @@ const LoginScreen: React.FC = () => {
 
     useEffect(() => {
         if (!isCredentialMode) {
-            const isPotentialMatch = pin.length === 3 && (pin === CONTROLLER_PIN || pin === COORDINATOR_PIN || technicians.some(t => String(t.pin) === pin || String(t.password) === pin));
-            if (isPotentialMatch || pin.length >= 4) {
+            const isPotentialMatch = 
+                (pin.length === CONTROLLER_PIN.length && pin === CONTROLLER_PIN) || 
+                (pin.length === COORDINATOR_PIN.length && pin === COORDINATOR_PIN) || 
+                technicians.some(t => String(t.pin) === pin);
+
+            if (isPotentialMatch || pin.length >= 6) {
                 const timer = setTimeout(() => {
-                    const matchesAny = pin === CONTROLLER_PIN || pin === COORDINATOR_PIN || technicians.some(t => String(t.pin) === pin || String(t.password) === pin);
-                    if (matchesAny) {
-                        handlePinLoginAttempt(pin);
-                    } else if (pin.length >= 4) {
-                        handlePinLoginAttempt(pin);
-                    }
+                    handlePinLoginAttempt(pin);
                 }, 300);
                 return () => clearTimeout(timer);
             }
