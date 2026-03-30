@@ -163,7 +163,9 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
                                     <span className="bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-full animate-pulse uppercase">ESCALATED</span>
                                 )}
                             </div>
-                            <p className="text-xs text-gray-500">Assigned to: {technician?.name}</p>
+                            <p className="text-xs text-gray-500">
+                                Assigned to: {technician?.name} | Created: {new Date(ticket.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            </p>
                         </div>
                         <div className="text-right">
                             <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusChip(ticket.status)}`}>
