@@ -42,19 +42,39 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             phone: '',
             address: '',
             complaint: '',
-            serviceCategory: 'Other'
+            serviceCategory: 'Other',
+            productName: '',
+            serialNumber: '',
+            purchaseDate: undefined,
+            warrantyApplicable: false
         };
 
         // 1. Search for labels (Key: Value) with flexible spacing and capitalization
         const nameMatch = text.match(/(?:Customer Name|Name):\s*([^\n\r,]+)/i);
         const phoneMatch = text.match(/(?:Customer Mobile|Mobile|Phone|Ph):\s*(\d{10,12})/i) || text.match(/\b(?:\+?91)?[6-9]\d{9}\b/);
         const addressMatch = text.match(/(?:Customer Address|Address):\s*([^\n\r,]+(?:,\s*[^\n\r,]+)*)/i);
-        const complaintMatch = text.match(/(?:Complaint|Issue|Problem|Ticket Symptoms):\s*([^\n\r]+)/i);
+        const complaintMatch = text.match(/(?:Complaint|Issue|Problem|Ticket Symptoms|Symptoms):\s*([^\n\r]+)/i);
         const categoryMatch = text.match(/(?:Ticket Category|Category|Product):\s*([^\n\r]+)/i);
+        
+        // New extraction targets
+        const productMatch = text.match(/(?:Product|Compliant About):\s*([^\n\r]+)/i);
+        const serialMatch = text.match(/(?:Serial No|Serial Number|Sl No):\s*([^\n\r]+)/i);
+        const dateMatch = text.match(/(?:Purchase Date|Date):\s*(\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})/i);
 
         if (nameMatch) result.customerName = nameMatch[1].trim();
         if (phoneMatch) result.phone = (phoneMatch[1] || phoneMatch[0]).replace('+91', '').trim();
         if (addressMatch) result.address = addressMatch[1].trim();
+        if (productMatch) result.productName = productMatch[1].trim();
+        if (serialMatch) result.serialNumber = serialMatch[1].trim();
+        if (dateMatch) {
+            const dateStr = dateMatch[1];
+            // Basic normalization to YYYY-MM-DD
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts[0].length === 4) result.purchaseDate = dateStr as any; // YYYY-MM-DD
+                else result.purchaseDate = `${parts[2]}-${parts[1]}-${parts[0]}` as any; // DD-MM-YYYY
+            }
+        }
 
         // Extract complaint from Symptoms or direct label
         if (complaintMatch) {
@@ -68,12 +88,13 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         if (categoryMatch) result.serviceCategory = categoryMatch[1].trim() as any;
 
         // Warranty detection for simple parser
-        // Look for "Warranty", "2026", "2025" or "Applicability Yes"
         const isWarranty = /warranty|under warranty|new product/i.test(text) ||
             /Warranty Applicability\s*Yes/i.test(text) ||
+            /Service Category\s*Warranty/i.test(text) ||
             /\/2026\//.test(text) ||
             /\/2025\//.test(text);
 
+        result.warrantyApplicable = isWarranty;
         const warrantyTag = "(Under Warranty)";
         if (isWarranty) {
             if (result.complaint) {
@@ -112,12 +133,16 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             }
         }
 
-        // 4. If complaint is still empty, grab last non-empty line (usually the issue)
+        // 4. If complaint is still empty, use product name or last non-empty line
         if (!result.complaint || result.complaint === warrantyTag) {
-            const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const lastLine = lines[lines.length - 1];
-            if (lastLine && !lastLine.includes(':') && lastLine.length > 5) {
-                result.complaint = (lastLine + (isWarranty && !lastLine.includes('Warranty') ? ` ${warrantyTag}` : "")).trim();
+            if (result.productName) {
+                result.complaint = `Complaint for ${result.productName} ${isWarranty ? warrantyTag : ''}`;
+            } else {
+                const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                const lastLine = lines[lines.length - 1];
+                if (lastLine && !lastLine.includes(':') && lastLine.length > 5) {
+                    result.complaint = (lastLine + (isWarranty && !lastLine.includes('Warranty') ? ` ${warrantyTag}` : "")).trim();
+                }
             }
         }
 
@@ -156,13 +181,28 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
 
             const ai = new GoogleGenAI({ apiKey });
 
-            const prompt = `Extract ticket information from the provided text/image.
+            const prompt = `Extract ticket information from the provided text/image for a service request. 
+            The image is likely a screenshot of a service portal.
+            
+            Return ONLY a valid JSON object with the following fields:
+            - customerName: The name of the client.
+            - phone: 10-digit mobile number only (remove +91 or any special chars).
+            - address: Complete delivery or service address.
+            - complaint: A brief description of the issue. If not explicitly found, use "Complaint about " + product name.
+            - serviceCategory: One of (Chimney, Cook top, Cooking Range, Hob, Electric kettle, Microwave Oven, Other Small Appliance, Other).
+            - warrantyApplicable: Boolean (true if Service Category is Warranty, or if it mentions "Under Warranty", or if purchase date is recent).
+            - productName: (ONLY IF under warranty) Product label/make/model (e.g. CH6000SS60BF).
+            - serialNumber: (ONLY IF under warranty) Look for "Serial No" or similar.
+            - purchaseDate: (ONLY IF under warranty) Format as YYYY-MM-DD. Look for "Purchase Date".
+            
             Rules:
-            1. Return ONLY a JSON object with: customerName, phone (10 digits only), address, complaint, serviceCategory (Chimney, Cook top, Cooking Range, Hob, Electric kettle, Microwave Oven, Other Small Appliance, Other).
-            2. VERY IMPORTANT: If the ticket is for a new product or mentions warranty, append "(Under Warranty)" to the complaint.
-            3. If a value is unknown, use an empty string.`;
+            1. If warrantyApplicable is false, set productName, serialNumber, and purchaseDate to empty strings.
+            2. If a value is unknown, use an empty string or false for boolean.
+            3. Ensure phone contains exactly 10 digits.
+            4. For complaint, if "Symptoms" are listed, include them.`;
 
             const parts: any[] = [];
+            // [No changes needed in parts logic...]
             if (mode === 'text') {
                 parts.push({ text: inputText });
             } else if (inputFile) {
@@ -201,12 +241,32 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
 
             const cleanJson = jsonString.replace(/```json|```/g, '').trim();
             const parsedData = JSON.parse(cleanJson);
+            
+            // Map common aliases if AI missed them
+            if (!parsedData.complaint && parsedData.productName) {
+                parsedData.complaint = `Complaint about ${parsedData.productName}`;
+            }
+
+            // Enforce warranty-only rule for specific fields
+            if (!parsedData.warrantyApplicable) {
+                delete parsedData.productName;
+                delete parsedData.serialNumber;
+                delete parsedData.purchaseDate;
+            }
+
             onParsed(parsedData);
 
         } catch (err: any) {
             console.error("❌ AI Parsing Error:", err);
             if (mode === 'text') {
-                onParsed(simpleParser(inputText));
+                const manualParsed = simpleParser(inputText);
+                // Enforce warranty-only rule for simple parser fallback
+                if (!manualParsed.warrantyApplicable) {
+                     delete manualParsed.productName;
+                     delete manualParsed.serialNumber;
+                     delete manualParsed.purchaseDate;
+                }
+                onParsed(manualParsed);
             } else {
                 setError(`Scan Error: ${err.message || 'AI failed'}. Try manual entry or paste text instead.`);
             }
