@@ -165,8 +165,9 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         try {
             console.log("🚀 Starting AI Magic Scan...");
             // Try multiple possible environment variable names
-            const apiKey =
-                import.meta.env.VITE_GEMINI_API_KEY ||
+            const apiKey = 
+                localStorage.getItem('glen_gemini_key') ||
+                import.meta.env.VITE_GEMINI_API_KEY || 
                 // @ts-ignore
                 (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : null) ||
                 // @ts-ignore

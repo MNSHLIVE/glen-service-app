@@ -32,7 +32,11 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { technicians, addTechnician, deleteTechnician, isSyncing, syncTickets } = useAppContext();
     const [newTech, setNewTech] = useState({ name: '', pin: '', phone: '' });
 
-    const [editingId, setEditingId] = useState<string | null>(null);
+    const [settings, setSettings] = useState({
+        webhookUrl: localStorage.getItem('glen_webhook_url') || '',
+        sheetUrl: localStorage.getItem('glen_sheet_url') || '',
+        geminiKey: localStorage.getItem('glen_gemini_key') || ''
+    });
 
     const handleSave = async () => {
         if (!newTech.name || !newTech.pin) {
@@ -46,6 +50,13 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             role: 'Technician'
         });
         setNewTech({ name: '', pin: '', phone: '' });
+    };
+
+    const saveSettings = () => {
+        localStorage.setItem('glen_webhook_url', settings.webhookUrl);
+        localStorage.setItem('glen_sheet_url', settings.sheetUrl);
+        localStorage.setItem('glen_gemini_key', settings.geminiKey);
+        alert("Settings saved successfully!");
     };
 
     const handleDeleteClick = (techId: string, name: string) => {
@@ -66,7 +77,32 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-6 bg-white">
-                    <div className="flex justify-between items-center">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Custom Gemini API Key</label>
+                            <input
+                                type="password"
+                                value={settings.geminiKey}
+                                onChange={e => setSettings({ ...settings, geminiKey: e.target.value })}
+                                className="w-full px-4 py-2 border-2 border-purple-100 rounded-xl focus:border-purple-500 outline-none transition-all"
+                                placeholder="Paste your personal Gemini Key here"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">Leave blank to use the developer's default shared key.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Webhook URL (n8n)</label>
+                            <input
+                                type="text"
+                                value={settings.webhookUrl}
+                                onChange={e => setSettings({ ...settings, webhookUrl: e.target.value })}
+                                className="w-full px-4 py-2 border-2 border-gray-100 rounded-xl focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <button onClick={saveSettings} className="w-full bg-gray-800 text-white py-2 rounded-xl font-bold hover:bg-black">Save Global Settings</button>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-6 border-t">
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Staff List</h4>
                         <button onClick={syncTickets} disabled={isSyncing} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-bold">
                             {isSyncing ? 'Syncing...' : '🔄 Refresh List'}

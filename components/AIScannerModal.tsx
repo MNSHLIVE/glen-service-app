@@ -53,7 +53,7 @@ const AIScannerModal: React.FC<AIScannerModalProps> = ({ onClose, onTicketCreate
   const triggerCamera = () => cameraInputRef.current?.click();
 
   // ─── Step 1: Send image to Gemini ─────────────────────────────────────────
-  const handleScan = async () => {
+  const handleScan = async (retryCount = 0) => {
     if (!inputFile) {
       setErrorMessage('Please capture or upload a complaint image.');
       return;
@@ -64,6 +64,7 @@ const AIScannerModal: React.FC<AIScannerModalProps> = ({ onClose, onTicketCreate
 
     try {
       const apiKey = 
+        localStorage.getItem('glen_gemini_key') || 
         import.meta.env.VITE_GEMINI_API_KEY || 
         // @ts-ignore
         (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : null) ||
@@ -135,10 +136,23 @@ Guidelines:
       setStep('preview');
     } catch (err: any) {
       console.error('❌ Gemini scan error:', err);
+      
+      // AUTO-RETRY LOGIC for common temporary errors
+      const isTemporary = err.message?.includes('429') || err.message?.includes('503') || err.message?.includes('rate limit');
+      if (isTemporary && retryCount < 1) {
+        console.log("🔄 Model busy, retrying in 2 seconds...");
+        setTimeout(() => handleScan(retryCount + 1), 2000);
+        return;
+      }
+
       let msg = err.message || 'AI could not read the image.';
       if (msg.includes('404') || msg.includes('not found')) {
-        msg = "AI model capacity issue. Please try again in 30 seconds.";
+        msg = "Connecting to Vision AI. Please scan again.";
       }
+      if (msg.includes('429') || msg.includes('limit')) {
+        msg = "AI model is currently busy. Retrying in 10 seconds...";
+      }
+      
       setErrorMessage(`Scan Error: ${msg}`);
       setStep('error');
     }
