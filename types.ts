@@ -111,6 +111,7 @@ export interface Ticket {
   reason?: string;
   warrantyApplicable?: boolean;
   amountCollected?: number;
+  amountPending?: number;
   partsReplaced?: ReplacedPart[];
   pointsAwarded?: boolean;
   freeService?: boolean;

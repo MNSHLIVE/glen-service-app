@@ -213,7 +213,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             console.log("📡 Sending request to Gemini (gemini-1.5-flash)...");
 
             const result: any = await ai.models.generateContent({
-                model: 'gemini-1.5-flash',
+                model: 'gemini-1.5-flash-latest',
                 contents: [{
                     role: 'user',
                     parts: parts
