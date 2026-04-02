@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Ticket } from '../types';
 
 interface IntelligentAddTicketModalProps {
@@ -50,7 +50,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         };
 
         // 1. Search for labels (Key: Value) with flexible spacing and capitalization
-        const nameMatch = text.match(/(?:Customer Name|Name):\s*([^\n\r,]+)/i);
+        const nameMatch = text.match(/(?:Customer Name|Name|Customer):\s*([^\n\r,]+)/i);
         const phoneMatch = text.match(/(?:Customer Mobile|Mobile|Phone|Ph):\s*(\d{10,12})/i) || text.match(/\b(?:\+?91)?[6-9]\d{9}\b/);
         const addressMatch = text.match(/(?:Customer Address|Address):\s*([^\n\r,]+(?:,\s*[^\n\r,]+)*)/i);
         const complaintMatch = text.match(/(?:Complaint|Issue|Problem|Ticket Symptoms|Symptoms):\s*([^\n\r]+)/i);
@@ -180,7 +180,8 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                 return;
             }
 
-            const ai = new GoogleGenAI({ apiKey });
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             const prompt = `Extract ticket information from the provided text/image for a service request. 
             The image is likely a screenshot of a service portal.
@@ -203,34 +204,19 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             4. For complaint, if "Symptoms" are listed, include them.`;
 
             const parts: any[] = [];
-            // [No changes needed in parts logic...]
             if (mode === 'text') {
-                parts.push({ text: inputText });
+                parts.push({ text: `${prompt}\n\nText to parse:\n${inputText}` });
             } else if (inputFile) {
                 const base64Data = await fileToBase64(inputFile);
+                parts.push(prompt);
                 parts.push({ inlineData: { mimeType: inputFile.type, data: base64Data } });
             }
 
             console.log("📡 Sending request to Gemini (gemini-1.5-flash)...");
 
-            const result: any = await ai.models.generateContent({
-                model: 'gemini-1.5-flash-latest',
-                contents: [{
-                    role: 'user',
-                    parts: parts
-                }]
-            });
-
-            console.log("✅ AI Response received");
-
-            let jsonString = "";
-            if (result.response?.text) {
-                jsonString = typeof result.response.text === 'function' ? await result.response.text() : result.response.text;
-            } else if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                jsonString = result.candidates[0].content.parts[0].text;
-            } else if (typeof result.text === 'string') {
-                jsonString = result.text;
-            }
+            const result = await model.generateContent(parts);
+            const response = await result.response;
+            const jsonString = response.text();
 
             if (!jsonString) {
                 throw new Error("Empty AI response");

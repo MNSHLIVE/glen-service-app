@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabase } from '../lib/supabase';
 
 interface AIScannerModalProps {
@@ -75,7 +75,8 @@ const AIScannerModal: React.FC<AIScannerModalProps> = ({ onClose, onTicketCreate
         throw new Error('Gemini API Key missing. Please set VITE_GEMINI_API_KEY.');
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const base64 = await fileToBase64(inputFile);
 
       const prompt = `Act as a service center data entry specialist. Extract these 4 specific fields from the attached complaint ticket image:
@@ -98,32 +99,16 @@ Guidelines:
 
       console.log("📡 Running AI reconstruction...");
       
-      const result: any = await ai.models.generateContent({
-        model: 'gemini-1.5-flash-latest',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { inlineData: { mimeType: inputFile.type, data: base64 } },
-              { text: prompt },
-            ],
-          },
-        ],
-      });
-
-      let rawText = '';
-      if (result.response?.text) {
-        rawText = typeof result.response.text === 'function' ? await result.response.text() : result.response.text;
-      } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        rawText = result.candidates[0].content.parts[0].text;
-      } else if (typeof result?.text === 'string') {
-        rawText = result.text;
-      }
-
-      if (!rawText) throw new Error('AI could not identify any text. Please try a clearer photo.');
-
-      const clean = rawText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
+      const result = await model.generateContent([
+        prompt,
+        { inlineData: { mimeType: inputFile.type, data: base64 } }
+      ]);
+      const response = await result.response;
+      const jsonString = response.text();
+      
+      console.log("✅ AI Response received:", jsonString);
+      const cleanJson = jsonString.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
 
       if (!parsed.customer_name && !parsed.complaint) {
         throw new Error('Required fields (Name/Complaint) not found. Try again.');
@@ -146,8 +131,8 @@ Guidelines:
       }
 
       let msg = err.message || 'AI could not read the image.';
-      if (msg.includes('404') || msg.includes('not found')) {
-        msg = "Connecting to Vision AI. Please scan again.";
+      if (msg.includes('404') || msg.includes('not found') || msg.includes('403')) {
+        msg = "Connecting to Vision AI. Please check your API Key & scan again.";
       }
       if (msg.includes('429') || msg.includes('limit')) {
         msg = "AI model is currently busy. Retrying in 10 seconds...";

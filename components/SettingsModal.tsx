@@ -52,11 +52,14 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setNewTech({ name: '', pin: '', phone: '' });
     };
 
+    const [isSaved, setIsSaved] = useState(false);
+
     const saveSettings = () => {
         localStorage.setItem('glen_webhook_url', settings.webhookUrl);
         localStorage.setItem('glen_sheet_url', settings.sheetUrl);
         localStorage.setItem('glen_gemini_key', settings.geminiKey);
-        alert("Settings saved successfully!");
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
     };
 
     const handleDeleteClick = (techId: string, name: string) => {
@@ -99,7 +102,12 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 className="w-full px-4 py-2 border-2 border-gray-100 rounded-xl focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
-                        <button onClick={saveSettings} className="w-full bg-gray-800 text-white py-2 rounded-xl font-bold hover:bg-black">Save Global Settings</button>
+                        <button 
+                            onClick={saveSettings} 
+                            className={`w-full py-2 rounded-xl font-bold transition-all ${isSaved ? 'bg-green-500 text-white shadow-lg' : 'bg-gray-800 text-white hover:bg-black'}`}
+                        >
+                            {isSaved ? '✅ Settings Saved!' : 'Save Global Settings'}
+                        </button>
                     </div>
 
                     <div className="flex justify-between items-center pt-6 border-t">
