@@ -19,6 +19,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
   const [serviceCategory, setServiceCategory] = useState(initialData?.serviceCategory || '');
   const [preferredTime, setPreferredTime] = useState('10AM-12PM');
   const [adminNotes, setAdminNotes] = useState('');
+  const [isTest, setIsTest] = useState(false);
   
   // Warranty fields
   const [warrantyApplicable, setWarrantyApplicable] = useState<boolean>(initialData?.warrantyApplicable || false);
@@ -64,6 +65,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
       preferredTime,
       adminNotes,
       warrantyApplicable,
+      isTest,
       ...(warrantyApplicable ? {
         purchaseDate,
         productName,
@@ -153,6 +155,18 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
             </div>
 
             <input placeholder="Special Admin Notes" value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full border rounded-xl px-4 py-3 bg-red-50 text-red-800" />
+ 
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+               <label className="flex items-center space-x-3 cursor-pointer">
+                 <input 
+                   type="checkbox" 
+                   checked={isTest} 
+                   onChange={e => setIsTest(e.target.checked)}
+                   className="w-5 h-5 text-gray-600 rounded border-gray-300 focus:ring-gray-500"
+                 />
+                 <span className="text-sm font-bold text-gray-600">Mark as Test Ticket (Hidden from main dashboard)</span>
+               </label>
+            </div>
 
             <div className="flex space-x-3 pt-4">
               <button type="button" onClick={onClose} className="flex-1 bg-gray-100 py-3 rounded-xl font-bold text-gray-600">Cancel</button>

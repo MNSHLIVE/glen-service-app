@@ -68,7 +68,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     warrantyApplicable: t.warranty_applicable,
     remarks: t.work_done, // Use work_done as the remarks source
     productUpdatedAt: t.product_updated_at,
-    jobStartedAt: t.job_started_at
+    jobStartedAt: t.job_started_at,
+    isDeleted: t.is_deleted
   });
 
   const normalizeTechnician = (tech: any) => ({
@@ -104,6 +105,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data, error } = await supabase
         .from('tickets')
         .select('*')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .or('is_test.is.null,is_test.eq.false')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -200,7 +203,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         purchase_date: ticketData.purchaseDate,
         warranty_applicable: ticketData.warrantyApplicable,
         service_booking_date: ticketData.serviceBookingDate || new Date().toISOString(),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        is_test: ticketData.isTest || false
       }]);
 
     if (error) {
@@ -501,35 +505,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteTicket = async (ticketId: string) => {
-    console.log("🗑️ Supabase: Soft Deleting Ticket:", ticketId);
-    
-    // Check if user confirmed
-    if (!window.confirm("Are you sure you want to PERMANENTLY delete this ticket from the dashboard?")) return;
+    // 5. User confirmation
+    if (!window.confirm("Are you sure you want to remove this ticket?")) return;
 
-    const { error } = await supabase
-      .from('tickets')
-      .update({ is_deleted: true })
-      .eq('id', ticketId);
+    // 3. Optimistic UI update: remove from state immediately for instant feedback
+    const originalTickets = [...tickets];
+    setTickets(prev => prev.filter(t => t.id !== ticketId));
 
-    if (error) {
-      console.error("❌ Delete Error:", error);
-      alert("Failed to delete ticket: " + error.message);
-      return;
+    try {
+      // 1. RPC Call
+      const { error: rpcError } = await supabase.rpc('hide_ticket', { ticket_id: ticketId });
+
+      // 1. Only run fallback if RPC fails
+      if (rpcError) {
+        console.warn("⚠️ RPC hide_ticket failed, falling back to direct update:", rpcError);
+        // 2. Correct fallback: update is_deleted and completed_at with ISO timestamp
+        const { error: updateError } = await supabase
+          .from('tickets')
+          .update({ 
+            is_deleted: true,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', ticketId);
+        
+        // 6. If both fail, throw to catch block
+        if (updateError) throw updateError;
+      }
+
+      // Sync to n8n for audit log (Async)
+      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          function: 'DELETE_TICKET',
+          action: 'DELETE_TICKET',
+          ticket_id: ticketId,
+          deleted_at: new Date().toISOString()
+        })
+      }).catch(() => { });
+
+      // 3 & 4. loadTickets() removed to maintain instant UI removal
+    } catch (err: any) {
+      console.error("❌ Delete Error:", err);
+      // 6. Revert optimistic update on failure
+      setTickets(originalTickets);
+      alert("Something went wrong. Please try again.");
     }
-
-    // Optional: Sync to n8n for audit log
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'DELETE_TICKET',
-        action: 'DELETE_TICKET',
-        ticket_id: ticketId,
-        deleted_at: new Date().toISOString()
-      })
-    }).catch(() => { });
-
-    await loadTickets();
   };
 
   return (

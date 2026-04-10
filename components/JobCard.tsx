@@ -196,8 +196,13 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
         setIsReassignModalOpen(true);
     };
 
-    const handleDelete = () => {
-       deleteTicket(ticket.id);
+    const handleDelete = async () => {
+        try {
+            await deleteTicket(ticket.id);
+        } catch (err) {
+            console.error("Delete failed:", err);
+            alert("Failed to delete ticket. Please try again.");
+        }
     };
 
     return (
