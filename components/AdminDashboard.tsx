@@ -81,10 +81,6 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                             <span className={`w-2 h-2 rounded-full ${onlineCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{onlineCount} Live Now</span>
                         </div>
-                        <div className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 bg-green-100 text-green-700 border">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                            <span>n8n active</span>
-                        </div>
                     </div>
                 </div>
 

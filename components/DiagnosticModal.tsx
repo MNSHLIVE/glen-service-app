@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { APP_CONFIG, APP_VERSION } from '../config';
+import { supabase } from '../lib/supabase';
 
 interface DiagnosticModalProps {
     onClose: () => void;
@@ -25,18 +26,14 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
             if (hasApiKey) addLog('✅ Secure API_KEY context detected.', 'success');
             else addLog('❌ ERROR: API_KEY missing. AI features will fail.', 'error');
 
-            // Check 2: Production Network Reachability
-            addLog(`Pinging Hostinger Server: ${APP_CONFIG.MASTER_WEBHOOK_URL.substring(0, 30)}...`, 'info');
+            // Check 2: Supabase Connectivity
+            addLog(`Verifying Supabase Connection: ${APP_CONFIG.BRANDING.companyName}...`, 'info');
             try {
-                const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'HEALTH_CHECK' }),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                if (response.ok) addLog('✅ Production automation server responded.', 'success');
-                else addLog(`⚠️ Warning: Server responded with status ${response.status}`, 'error');
+                const { data, error } = await supabase.from('tickets').select('id').limit(1);
+                if (!error) addLog('✅ Supabase Database is reachable and responding.', 'success');
+                else addLog(`❌ Supabase Error: ${error.message}`, 'error');
             } catch (e) {
-                addLog('❌ ERROR: Automation URL unreachable. Check VPN or Firewall.', 'error');
+                addLog('❌ ERROR: Failed to connect to Supabase. Check your internet or API keys.', 'error');
             }
 
             addLog('System Check Completed.', 'info');
@@ -47,29 +44,8 @@ const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ onClose }) => {
 
     const runSimulation = async (action: string, mockPayload: Record<string, any>) => {
         setIsSimulating(action);
-        const fullPayload = { action, ...mockPayload, isSimulation: true };
-
-        addLog(`Triggering ${action}... Payload below:`, 'info');
-        addLog(JSON.stringify(fullPayload, null, 2), 'code');
-
-        try {
-            const response = await fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fullPayload)
-            });
-
-            if (response.ok) {
-                addLog(`✅ Server accepted payload (Status 200).`, 'success');
-                addLog(`Check Google Sheet now.`, 'success');
-            } else {
-                addLog(`❌ Server Rejected: Status ${response.status}`, 'error');
-            }
-        } catch (e) {
-            addLog(`❌ Network Error: Failed to reach n8n.`, 'error');
-        } finally {
-            setIsSimulating(null);
-        }
+        addLog(`Simulation mode for ${action} is currently disabled as n8n has been removed.`, 'info');
+        setIsSimulating(null);
     };
 
     return (

@@ -213,19 +213,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    // Trigger n8n for WhatsApp & Google Sheets (Async)
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'NEW_TICKET',
-        action: 'NEW_TICKET',
-        ticket_id: newId,
-        ...ticketData,
-        ticket: { ...ticketData, ticket_id: newId } // Keep nested for backward compatibility
-      })
-    }).catch(e => console.warn("n8n sync failed, but ticket is saved in DB."));
-
     await loadTickets();
   };
 
@@ -274,33 +261,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.warn("⚠️ Point Award Skipped: technicianId not found for ticket:", ticket.id);
       }
 
-      // Trigger n8n for Invoice & Google Sheets (Async)
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          function: 'JOB_COMPLETED',
-          action: 'JOB_COMPLETED',
-          ticket_id: ticket.id,
-          completed_at: new Date().toISOString(),
-          technician_id: ticket.technicianId,
-          technician_name: ticket.technicianName,
-          customer_name: ticket.customerName,
-          work_done_summary: ticket.workDone,
-          amount_collected: ticket.amountCollected,
-          amount_pending: ticket.amountPending || 0,
-          payment_status: ticket.paymentStatus || ticket.paymentMethod,
-          points_awarded: 50,
-          parts_used: JSON.stringify(ticket.partsReplaced),
-          amc_discussion: ticket.serviceChecklist?.amcDiscussion ? 'Yes' : 'No',
-          free_visit: ticket.freeService ? 'Yes' : 'No',
-          verified_warranty: ticket.manualWarrantyStatus || 'N/A',
-          bill_copy: ticket.billImageUrl || 'N/A',
-          verified_serial: ticket.serialNumber || 'N/A',
-          verified_purchase_date: ticket.purchaseDate || 'N/A',
-          ticket: { ...ticket, status: 'Completed' } // Nested fallback
-        })
-      }).catch(() => { });
     }
 
     await loadTickets();
@@ -325,23 +285,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    // Sync to n8n/Google Sheets
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ADD_TECHNICIAN',
-        action: 'ADD_TECHNICIAN',
-        technician_id: newId,
-        technician_name: tech.name,
-        pin: tech.pin,
-        phone: tech.phone,
-        role: tech.role || 'Technician',
-        status: 'ACTIVE',
-        technician: { id: newId, ...tech, status: 'ACTIVE' } // Nested fallback
-      })
-    }).catch(() => { });
-
     await loadTechnicians();
   };
 
@@ -352,19 +295,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .eq('id', technicianId);
 
     if (error) throw error;
-
-    // Sync to n8n/Google Sheets
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'DELETE_TECHNICIAN',
-        action: 'DELETE_TECHNICIAN',
-        technician_id: technicianId,
-        status: 'INACTIVE',
-        deleted_at: new Date().toISOString()
-      })
-    }).catch(() => { });
 
     await loadTechnicians();
   };
@@ -384,21 +314,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (error) throw error;
       alert(`✅ ${status} Successful!`);
 
-      // Sync to n8n/Google Sheets
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          function: 'ATTENDANCE',
-          action: 'ATTENDANCE',
-          type: status === 'Clock In' ? 'IN' : 'OUT',
-          technician_id: user.id,
-          technician_name: user.name,
-          status: status, // Include both type and status
-          time: new Date().toISOString(),
-          timestamp: new Date().toISOString() // Alias
-        })
-      }).catch(() => { });
     } catch (err: any) {
       console.error("❌ Attendance Error:", err);
       alert("⚠️ Attendance Failed: " + (err.message || "Unknown error"));
@@ -487,24 +402,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     alert("✅ Ticket Escalated Successfully! Status reset to New.");
-
-    // Trigger n8n for Escalation Alert (Async)
-    fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        function: 'ESCALATION',
-        action: 'ESCALATION',
-        ticket_id: ticketId,
-        senior_tech: seniorTech?.name,
-        notes: notes
-      })
-    }).catch(e => console.warn("n8n Escalation trigger failed."));
-
     await syncTickets();
   };
 
   const deleteTicket = async (ticketId: string) => {
+    console.log("🗑️ deleteTicket called for ID:", ticketId);
     // 5. User confirmation
     if (!window.confirm("Are you sure you want to remove this ticket?")) return;
 
@@ -531,18 +433,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // 6. If both fail, throw to catch block
         if (updateError) throw updateError;
       }
-
-      // Sync to n8n for audit log (Async)
-      fetch(APP_CONFIG.MASTER_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          function: 'DELETE_TICKET',
-          action: 'DELETE_TICKET',
-          ticket_id: ticketId,
-          deleted_at: new Date().toISOString()
-        })
-      }).catch(() => { });
 
       // 3 & 4. loadTickets() removed to maintain instant UI removal
     } catch (err: any) {

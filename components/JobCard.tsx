@@ -197,6 +197,7 @@ const AdminJobCard: React.FC<JobCardProps> = ({ ticket, onViewDetails }) => {
     };
 
     const handleDelete = async () => {
+        console.log("📍 handleDelete triggered for ticket:", ticket.id);
         try {
             await deleteTicket(ticket.id);
         } catch (err) {
