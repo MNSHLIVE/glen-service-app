@@ -139,7 +139,7 @@ const AdminDashboard: React.FC<{ onViewTicket: (id: string) => void }> = ({ onVi
                     </button>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                    <button onClick={() => setShowAIScanner(true)} className="flex flex-col items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-4 rounded-3xl font-bold shadow-lg active:scale-95 transition-all">
+                    <button onClick={() => setShowIntelMode('image')} className="flex flex-col items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-4 rounded-3xl font-bold shadow-lg active:scale-95 transition-all">
                         <span className="text-lg mb-0.5">📷</span>
                         <span className="text-[11px] font-bold">AI Scanner</span>
                         <span className="text-[9px] opacity-70">Image → Ticket</span>

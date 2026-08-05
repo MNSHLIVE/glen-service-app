@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Ticket } from '../types';
 
@@ -26,13 +26,21 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             setInputFile(file);
+            if (preview) URL.revokeObjectURL(preview);
             setPreview(URL.createObjectURL(file));
+            setError('');
         }
     };
+
+    const triggerUpload = () => fileInputRef.current?.click();
+    const triggerCamera = () => cameraInputRef.current?.click();
 
     // Improved Simple Parser for structured formats (WhatsApp, PDF text, and Screenshot OCR)
     const simpleParser = (text: string): Partial<Ticket> => {
@@ -43,6 +51,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             address: '',
             complaint: '',
             serviceCategory: 'Other',
+            preferredTime: '10AM-12PM',
             productName: '',
             serialNumber: '',
             purchaseDate: undefined,
@@ -60,12 +69,23 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
         const productMatch = text.match(/(?:Product|Compliant About):\s*([^\n\r]+)/i);
         const serialMatch = text.match(/(?:Serial No|Serial Number|Sl No):\s*([^\n\r]+)/i);
         const dateMatch = text.match(/(?:Purchase Date|Date):\s*(\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})/i);
+        const timeMatch = text.match(/(?:Time|Preferred Time|Visit Time|Time of visit):\s*([^\n\r]+)/i);
 
         if (nameMatch) result.customerName = nameMatch[1].trim();
         if (phoneMatch) result.phone = (phoneMatch[1] || phoneMatch[0]).replace('+91', '').trim();
         if (addressMatch) result.address = addressMatch[1].trim();
         if (productMatch) result.productName = productMatch[1].trim();
         if (serialMatch) result.serialNumber = serialMatch[1].trim();
+        if (timeMatch) {
+            const timeStr = timeMatch[1].toLowerCase();
+            if (timeStr.includes('12') || timeStr.includes('1') || timeStr.includes('2') || timeStr.includes('afternoon')) {
+                result.preferredTime = '12PM-03PM';
+            } else if (timeStr.includes('3') || timeStr.includes('4') || timeStr.includes('5') || timeStr.includes('6') || timeStr.includes('evening')) {
+                result.preferredTime = '03PM-06PM';
+            } else {
+                result.preferredTime = '10AM-12PM';
+            }
+        }
         if (dateMatch) {
             const dateStr = dateMatch[1];
             // Basic normalization to YYYY-MM-DD
@@ -184,7 +204,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             const prompt = `Extract ticket information from the provided text/image for a service request. 
-            The image is likely a screenshot of a service portal.
+            The image is likely a screenshot of a service portal or a photo of a written complaint.
             
             Return ONLY a valid JSON object with the following fields:
             - customerName: The name of the client.
@@ -192,6 +212,7 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
             - address: Complete delivery or service address.
             - complaint: A brief description of the issue. If not explicitly found, use "Complaint about " + product name.
             - serviceCategory: One of (Chimney, Cook top, Cooking Range, Hob, Electric kettle, Microwave Oven, Other Small Appliance, Other).
+            - preferredTime: Preferred time range for the visit. Look for any mention of timing or hours. Match it to one of these EXACT values: "10AM-12PM", "12PM-03PM", "03PM-06PM". If no time is mentioned, default to "10AM-12PM".
             - warrantyApplicable: Boolean (true if Service Category is Warranty, or if it mentions "Under Warranty", or if purchase date is recent).
             - productName: (ONLY IF under warranty) Product label/make/model (e.g. CH6000SS60BF).
             - serialNumber: (ONLY IF under warranty) Look for "Serial No" or similar.
@@ -297,26 +318,47 @@ const IntelligentAddTicketModal: React.FC<IntelligentAddTicketModalProps> = ({ m
                                 <p className="text-[10px] text-gray-400 mt-2">Tip: Just copy the whole message and paste it here.</p>
                             </div>
                         ) : (
-                            <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileChange}
-                                    id="file-upload"
-                                    className="hidden"
-                                />
-                                <label htmlFor="file-upload" className="cursor-pointer group">
-                                    {preview ? (
-                                        <img src={preview} alt="Preview" className="mx-auto rounded-lg max-h-48 shadow-md" />
-                                    ) : (
-                                        <div className="space-y-2">
-                                            <div className="mx-auto w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                                                <UploadIcon />
-                                            </div>
-                                            <p className="text-sm font-medium text-gray-600">Click to upload screenshot</p>
+                            <div className="space-y-4">
+                                <input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} className="hidden" />
+                                <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} ref={cameraInputRef} className="hidden" />
+
+                                {preview ? (
+                                    <div className="relative group overflow-hidden rounded-2xl border-2 border-gray-200 bg-gray-50 aspect-video flex items-center justify-center">
+                                        <img src={preview} alt="Preview" className="max-h-full object-contain" />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 gap-4">
+                                            <button type="button" onClick={triggerCamera} className="px-4 py-2 bg-white text-gray-800 rounded-lg text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition-transform">Take Photo</button>
+                                            <button type="button" onClick={triggerUpload} className="px-4 py-2 bg-white text-gray-800 rounded-lg text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition-transform">Choose File</button>
                                         </div>
-                                    )}
-                                </label>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={triggerCamera}
+                                            className="flex flex-col items-center justify-center p-6 bg-blue-50/50 border border-blue-100 rounded-2xl hover:bg-blue-50 transition-all group"
+                                        >
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow mb-3 group-hover:scale-115 transition-transform">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Take Photo</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={triggerUpload}
+                                            className="flex flex-col items-center justify-center p-6 bg-purple-50/50 border border-purple-100 rounded-2xl hover:bg-purple-50 transition-all group"
+                                        >
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-purple-600 shadow mb-3 group-hover:scale-115 transition-transform">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-[10px] font-black text-purple-900 uppercase tracking-widest">Upload File</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

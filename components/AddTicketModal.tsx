@@ -17,7 +17,7 @@ const AddTicketModal: React.FC<AddTicketModalProps> = ({ onClose, initialData })
   const [complaint, setComplaint] = useState(initialData?.complaint || '');
   const [technicianId, setTechnicianId] = useState('');
   const [serviceCategory, setServiceCategory] = useState(initialData?.serviceCategory || '');
-  const [preferredTime, setPreferredTime] = useState('10AM-12PM');
+  const [preferredTime, setPreferredTime] = useState(initialData?.preferredTime || '10AM-12PM');
   const [adminNotes, setAdminNotes] = useState('');
   const [isTest, setIsTest] = useState(false);
   

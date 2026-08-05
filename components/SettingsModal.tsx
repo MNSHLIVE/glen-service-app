@@ -30,7 +30,7 @@ const PresenceDot: React.FC<{ lastSeen?: string }> = ({ lastSeen }) => {
 
 const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { technicians, addTechnician, deleteTechnician, isSyncing, syncTickets } = useAppContext();
-    const [newTech, setNewTech] = useState({ name: '', pin: '', phone: '' });
+    const [newTech, setNewTech] = useState({ name: '', pin: '', phone: '', role: 'Technician' });
 
     const [settings, setSettings] = useState({
         webhookUrl: localStorage.getItem('glen_webhook_url') || '',
@@ -47,9 +47,9 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             name: newTech.name,
             pin: newTech.pin,
             phone: newTech.phone,
-            role: 'Technician'
+            role: newTech.role
         });
-        setNewTech({ name: '', pin: '', phone: '' });
+        setNewTech({ name: '', pin: '', phone: '', role: 'Technician' });
     };
 
     const [isSaved, setIsSaved] = useState(false);
@@ -127,7 +127,17 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         <div className="flex items-center space-x-3">
                                             <PresenceDot lastSeen={tech.lastSeen} />
                                             <div>
-                                                <p className="font-bold text-gray-800 leading-tight">{tech.name}</p>
+                                                <p className="font-bold text-gray-800 leading-tight">
+                                                    {tech.name}
+                                                    <span className={`ml-2 px-2 py-0.5 text-[9px] font-black rounded-full uppercase ${
+                                                        tech.role === 'Admin' ? 'bg-red-100 text-red-800' :
+                                                        tech.role === 'Controller' ? 'bg-purple-100 text-purple-800' :
+                                                        tech.role === 'Coordinator' ? 'bg-indigo-100 text-indigo-800' :
+                                                        'bg-blue-100 text-blue-800'
+                                                    }`}>
+                                                        {tech.role || 'Technician'}
+                                                    </span>
+                                                </p>
                                                 <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">PIN: {tech.pin} • ID: {tech.id}</p>
                                             </div>
                                         </div>
@@ -149,7 +159,7 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                     <div className="pt-6 border-t">
                         <h4 className="text-sm font-bold text-gray-800 mb-4 uppercase tracking-wider flex items-center">
-                            Register New Technician
+                            Register New User / Staff
                         </h4>
                         <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-4 shadow-inner">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -173,13 +183,36 @@ const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm font-mono outline-none"
                                     />
                                 </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phone Number</label>
+                                    <input
+                                        type="tel"
+                                        placeholder="Phone Number"
+                                        value={newTech.phone}
+                                        onChange={e => setNewTech({ ...newTech, phone: e.target.value.replace(/\D/g, '') })}
+                                        className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">System Role</label>
+                                    <select
+                                        value={newTech.role}
+                                        onChange={e => setNewTech({ ...newTech, role: e.target.value })}
+                                        className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm bg-white outline-none"
+                                    >
+                                        <option value="Technician">Technician</option>
+                                        <option value="Coordinator">Coordinator</option>
+                                        <option value="Controller">Controller</option>
+                                        <option value="Admin">Admin</option>
+                                    </select>
+                                </div>
                             </div>
                             <button
                                 type="button"
                                 onClick={handleSave}
                                 className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-95 transition-all"
                             >
-                                Save Technician
+                                Save User
                             </button>
                         </div>
                     </div>
